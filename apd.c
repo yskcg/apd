@@ -235,7 +235,7 @@ int sproto_proc_data(int fd, char *data, int len)
 		}
 		else if (ud.ok == RESPONSE_OK)
 			return 1;
-		else 
+		else
 			ud.session = SPROTO_REQUEST;
 		ud.len = 1024;
 	}
@@ -372,7 +372,7 @@ int get_gateway(char *gateway, char *ifName)
 		free(nlMsg);
 		return -1;
 	}
-	
+
 	if ((len = readNlSock(sock, msgBuf, msgSeq, getpid())) < 0) {
 		print_debug_log("Read From Socket Failed…\n");
 		close(sock);
@@ -425,7 +425,7 @@ int get_ip_in_cfgfile(char *file, char *ip)
 		if ((end = strstr(start, "'")) == NULL)
 			end = strstr(start, "\n");
 		*end = '\0';
-		
+
 		strcpy(ip, start);
 		break;
 	}
@@ -443,7 +443,7 @@ int get_netcard_mac(void)
 	if (sockfd <= 0) {
 		fputs("Can not create socket!\n", stderr);
 		return 0;
-	}      
+	}
 
 	memset(&buffer, 0, sizeof(struct ifreq));
 	strcpy(buffer.ifr_name, "wlan0");
@@ -452,7 +452,7 @@ int get_netcard_mac(void)
 
 	hw_addr = (unsigned char *)&buffer.ifr_hwaddr.sa_data;
 
-	sprintf(apinfo.apmac, "%02x:%02x:%02x:%02x:%02x:%02x", 
+	sprintf(apinfo.apmac, "%02x:%02x:%02x:%02x:%02x:%02x",
 			hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5]);
 	return 1;
 }
@@ -482,7 +482,7 @@ int get_ip_in_dhcp_opt(char *file, char *ip)
 			sprintf(ip + strlen(ip), "%ld", strtol(data, NULL, 16));
 		else
 			sprintf(ip + strlen(ip), ".%ld", strtol(data, NULL, 16));
-	} 
+	}
 	return is_ip(ip);
 }
 
@@ -528,9 +528,9 @@ int open_file(char *path, char *res, char *flag)
 		}
 		if ((str = strstr(buf, flag)) == NULL)
 			continue;
-		if ((start = strchr(str, '"')) == NULL)
+		if ((start = strchr(str, '"')) == NULL && (start = strchr(str, '\'')) == NULL)
 			continue;
-		if ((end = strchr(start + 1, '"')) == NULL)
+		if ((end = strchr(start + 1, '"')) == NULL && (end = strchr(start + 1, '\'')) == NULL )
 			continue;
 		break;
 	}
@@ -606,35 +606,35 @@ int get_ap_iwinfo(struct uci_context *c)
 
 int del_wireless_cfg(struct uci_context *c, char *section, char *option)
 {
-	struct uci_ptr ptr ={  
-		.package = "wireless",	
-		.section = section,  
-		.option = option,   
+	struct uci_ptr ptr ={
+		.package = "wireless",
+		.section = section,
+		.option = option,
 	};
 	print_debug_log("[debug] [del cfg] [sec:%s, opt:%s]\n", section, option);
-	uci_delete(c, &ptr); //写入配置	
-	uci_commit(c, &ptr.p, false); //提交保存更改	
+	uci_delete(c, &ptr); //写入配置
+	uci_commit(c, &ptr.p, false); //提交保存更改
 	return 1;
 }
 
 int uci_set_cfg(struct uci_context *c, char *section, char *option, char *value)
 {
-	struct uci_ptr ptr ={  
-		.package = "wireless",  
-		.section = section,  
-		.option = option,  
-		.value = value,  
+	struct uci_ptr ptr ={
+		.package = "wireless",
+		.section = section,
+		.option = option,
+		.value = value,
 	};
 	print_debug_log("[debug] [set cfg] [sec:%s, opt:%s, val:%s]\n", section, option, value);
-	uci_set(c, &ptr); //写入配置  
-	uci_commit(c, &ptr.p, false); //提交保存更改  
+	uci_set(c, &ptr); //写入配置
+	uci_commit(c, &ptr.p, false); //提交保存更改
 	uci_unload(c, ptr.p); //卸载包
 	return 1;
 }
 
 int set_ap_cfg(void)
 {
-	struct uci_package * pkg = NULL;  
+	struct uci_package * pkg = NULL;
 	struct uci_element *se;
 	struct uci_section *s;
 	FILE *fp = NULL;
@@ -648,7 +648,7 @@ int set_ap_cfg(void)
 
 	if (UCI_OK != uci_load(ctx, path, &pkg))
 		return 0;
-	uci_foreach_element(&pkg->sections, se)  
+	uci_foreach_element(&pkg->sections, se)
 	{
 		s = uci_to_section(se);
 		print_debug_log("[debug] [uci config parse] [sec:%s]\n", s->e.name);
@@ -658,7 +658,7 @@ int set_ap_cfg(void)
 			continue;
 		}
 		sprintf(sec[i++], "%s", s->e.name);
-	} 
+	}
 
 	for (i = 0; dev[i][0] != 0; i++)
 	{
@@ -705,7 +705,7 @@ int set_ap_cfg(void)
 			str = strtok(NULL, ",");
 		}
 		i = 0;
-		ssid = strtok(rcvinfo.ssid, ",");	
+		ssid = strtok(rcvinfo.ssid, ",");
 		while(ssid)
 		{
 			if (sec[i][0] == 0)
@@ -788,7 +788,7 @@ int ap_post_data(void)
 		return -1;
 	memset(&ud, 0, sizeof(struct encode_ud));
 	ud.type = AP_STATUS;
-	ud.session = SPROTO_REQUEST;	
+	ud.session = SPROTO_REQUEST;
 	ud.stamac[0] = NULL;
 	ud.len = 200;
 	if ((size = sproto_encode_data(&ud, res)) <= 0){
@@ -834,7 +834,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 	int len, size;
 	char res[1024 * 6] = {0}, gw[20] = {0};
 	struct encode_ud ud;
-	
+
 	memset(&ud, 0, sizeof(struct encode_ud));
 	if (conn_tmout >= 3 || sfd <= 0)
 	{
@@ -849,7 +849,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 			if (create_socket(gw) == 0)
 				break;
 			sleep(2);
-		}	
+		}
 		print_debug_log("[debug] [NEW] [connect]!!\n");
 		uloop_fd_add(&apufd, ULOOP_READ);
 		ap_post_data();
@@ -924,7 +924,7 @@ void print_debug_log(const char *form ,...)
 	va_list arg;
 	char pbString[256];
 
-	va_start(arg,form);  
+	va_start(arg,form);
 	vsprintf(pbString, form, arg);
 	fprintf(debug, pbString);
 	va_end(arg);
@@ -983,7 +983,7 @@ static void apd_ubus_cb(struct ubus_request *req, int type, struct blob_attr *ms
 		fprintf(stderr, "No return code received from server\n");
 		return;
 	}
-	blobmsg_for_each_attr(attr, tb[STAINFO], len) 
+	blobmsg_for_each_attr(attr, tb[STAINFO], len)
 	{
 		blobmsg_parse(sta_policy, __STA_MAX, tb, blobmsg_data(attr), blobmsg_data_len(attr));
 		if (tb[MAC])
@@ -1049,47 +1049,22 @@ void get_host_ip(char *hostip)
 {
 	struct ifaddrs * ifAddrS = NULL, *tifad = NULL;
 	void * tmpAddrPtr = NULL;
-	char iparr[6][20] = {{0}};
 	int i = 0;
-	
+
 	getifaddrs(&ifAddrS);
-	while (ifAddrS != NULL) 
+	while (ifAddrS != NULL)
 	{
-		if (ifAddrS->ifa_addr->sa_family == AF_INET) 
+		if (ifAddrS->ifa_addr->sa_family == AF_INET)
 		{
 		  tmpAddrPtr = &((struct sockaddr_in *)ifAddrS->ifa_addr)->sin_addr;
-		  char ipaddr[INET_ADDRSTRLEN];
-		  inet_ntop(AF_INET, tmpAddrPtr, ipaddr, INET_ADDRSTRLEN);
-			if (strcasecmp(ifAddrS->ifa_name, "br-lan") == 0 && strcasecmp(ipaddr, "192.168.33.11") != 0)
-			{
-				strcpy(iparr[i], ipaddr);
-				i++;
-			}
-		} 
-		else if (ifAddrS->ifa_addr->sa_family == AF_INET6) 
-		{
-		  tmpAddrPtr = &((struct sockaddr_in *)ifAddrS->ifa_addr)->sin_addr;
-		  char ipaddr[INET6_ADDRSTRLEN];
-		  inet_ntop(AF_INET6, tmpAddrPtr, ipaddr, INET6_ADDRSTRLEN);
+		  inet_ntop(AF_INET, tmpAddrPtr, hostip, INET_ADDRSTRLEN);
 		}
 		tifad = ifAddrS;
 		ifAddrS = ifAddrS->ifa_next;
 		free(tifad);
 		tifad = NULL;
 	}
-	if (i == 1)
-	{
-		strcpy(hostip, iparr[0]);
-		return;
-	}
-	for (i = 0; iparr[i] != 0; i++)
-	{
-		if (strcasecmp(iparr[i], "192.168.33.11") != 0)
-		{
-			strcpy(hostip, iparr[i]);
-			break;
-		}
-	}
+
 	return;
 }
 
@@ -1097,7 +1072,7 @@ int create_socket(char *igw)
 {
 	struct sockaddr_in loc_addr;
 	struct sockaddr_in remo_addr;
-	char hostip[16] = {0}, gw[20] = {0};
+	char hostip[INET_ADDRSTRLEN] = {0}, gw[20] = {0};
 
 	if (is_ip(igw) > 0)
 		strncpy(gw, igw, 20);
@@ -1106,27 +1081,31 @@ int create_socket(char *igw)
 	if (is_ip(gw) <= 0)
 		return -1;
 	print_debug_log("[debug] [gw ip:%s]\n", gw);
-	
+
 	get_host_ip(hostip);
 	if (is_ip(hostip) <= 0)
 		return -1;
 	strcpy(apinfo.aip, hostip);
+	/*
   memset(&loc_addr, 0, sizeof(loc_addr));
   loc_addr.sin_family = AF_INET;
   loc_addr.sin_addr.s_addr = inet_addr(hostip);
-  loc_addr.sin_port = htons(0); 
+  loc_addr.sin_port = htons(0);
 
 	memset(&remo_addr, 0, sizeof(remo_addr));
+	*/
 	if((sfd = socket(AF_INET, SOCK_STREAM, 0)) <= 0){
 		print_debug_log("Create Socket Failed!\n");
 		return -1;
 	}
+	  /*
 	if(bind(sfd, (struct sockaddr*)&loc_addr, sizeof(loc_addr)))
   {
       print_debug_log("Client Bind Port Failed!\n");
 			close(sfd);
       return -1;
   }
+  */
 	/*
 	if (inet_aton(gw, &remo_addr.sin_addr) == 0) {
 		print_debug_log("[debug] [Server IP Address Error!]\n");
