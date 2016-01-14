@@ -9,6 +9,7 @@ static struct uloop_timeout timeout;
 static struct uloop_fd apufd;
 static char *stamac = NULL;
 static int sfd, tt = 300, conn_tmout = 0, mac_len = 0, macnum = 0;
+static int live = 0;
 #define SERVER_PORT    4444
 static struct uci_context *ctx = NULL;
 static struct ubus_context *uctx;
@@ -230,6 +231,10 @@ int sproto_proc_data(int fd, char *data, int len)
 	{
 		if (ud.ok == RESPONSE_OK && ud.type == AP_STATUS)
 		{
+			if (live == 0) {
+				live = 1;
+				system("(/etc/init.d/authd disable; /etc/init.d/authd stop) &");
+			}
 			conn_tmout = 0;
 			return 1;
 		}
@@ -854,6 +859,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 		uloop_fd_add(&apufd, ULOOP_READ);
 		ap_post_data();
 		conn_tmout = 0;
+		live = 0;
 		goto timeset;
 	}
 	char mac[32][18] = {{0}};
@@ -1049,7 +1055,6 @@ void get_host_ip(char *hostip)
 {
 	struct ifaddrs * ifAddrS = NULL, *tifad = NULL;
 	void * tmpAddrPtr = NULL;
-	int i = 0;
 
 	getifaddrs(&ifAddrS);
 	while (ifAddrS != NULL)
@@ -1070,7 +1075,7 @@ void get_host_ip(char *hostip)
 
 int create_socket(char *igw)
 {
-	struct sockaddr_in loc_addr;
+	//struct sockaddr_in loc_addr;
 	struct sockaddr_in remo_addr;
 	char hostip[INET_ADDRSTRLEN] = {0}, gw[20] = {0};
 
