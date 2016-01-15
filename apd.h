@@ -20,7 +20,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <libubox/usock.h>
-#include <limits.h> 
+#include <limits.h>
 #include <uci.h>
 #include <libubox/uloop.h>
 #include <libubox/ustream.h>
@@ -136,7 +136,7 @@ typedef struct ap_cfg_info
 	int flage;
 }ApCfgInfo;
 
-typedef struct 
+typedef struct
 {
 	char addr[80],
 	     md5[36];
@@ -192,7 +192,7 @@ void fill_data(ApCfgInfo *apcfg,char *tagname, char *value, int len);
 int get_gateway_ip(char *ip);
 int open_file(char *path, char *res, char *flag);
 int get_ap_revision(void);
-int uci_set_cfg(struct uci_context *c, char *section, char *option, char *value);
+int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, char *value);
 int set_ap_cfg(void);
 int get_netcard_ip(char *dev, char *ip) ;
 int proc_update(char *upd);
