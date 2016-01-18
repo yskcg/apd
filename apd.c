@@ -635,7 +635,7 @@ int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, 
 	print_debug_log("[debug] [set cfg] [sec:%s, opt:%s, val:%s]\n", section, option, value);
 	uci_set(c, &ptr); //写入配置
 	uci_commit(c, &ptr.p, false); //提交保存更改
-	uci_unload(c, ptr.p); //卸载包
+	uci_save(c, ptr.p); //卸载包
 	return 1;
 }
 
@@ -643,26 +643,27 @@ int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, 
 #define MAX_TEMPLATE (64)
 static int my_strtok(char *src, char *dst[], int n)
 {
-	char *saveptr, *c;
-	int i;
+	char *p;
+	int i, j;
 
 	for (i = 0; i < n; i++)
 		dst[i] = NULL;
 
 	print_debug_log("[debug] strtok src %s \n", src);
-	c = strtok_r(src, ",", &saveptr);
-	if (!c) {
-		print_debug_log("[debug] strtok src %d %s \n", 0, src);
-		dst[0] = src;
-		return 1;
-	}
 
 	i = 0;
-	do {
-		dst[i++] = c;
-		print_debug_log("[debug] strtok src %d %s \n", i, c);
-		c = strtok_r(NULL, ",", &saveptr);
-	} while(c);
+	p = src;
+	dst[i++] = src;
+	while(*p) {
+		if (*p == ',') {
+			*p = 0;
+			dst[i++] = p + 1;
+		}
+		p++;
+	}
+
+	for (j = 0; j < i; j++)
+		print_debug_log("[debug] strtok dst[%d] %s(%d) \n", j, dst[j], strlen(dst[j]));
 
 	return i;
 }
@@ -670,6 +671,8 @@ static int my_strtok(char *src, char *dst[], int n)
 int set_ap_cfg(void)
 {
 	struct uci_package * pkg = NULL;
+	struct uci_element *se, *tmp;
+	struct uci_section *s;
 	char path[] = "/etc/config/wireless";
 	int i = 0;
 	ctx = uci_alloc_context();
@@ -678,11 +681,6 @@ int set_ap_cfg(void)
 
 	if (UCI_OK != uci_load(ctx, path, &pkg))
 		return 0;
-
-	if (strlen(rcvinfo.channel) != 0)
-		uci_set_cfg(ctx, "radio0", "wifi-device", "channel", rcvinfo.channel);
-	if (strlen(rcvinfo.txpower) != 0)
-		uci_set_cfg(ctx, "radio0", "wifi-device", "txpower", rcvinfo.txpower);
 
 	int n, n1, n2;
 	char *ssid[MAX_TEMPLATE];
@@ -699,14 +697,27 @@ int set_ap_cfg(void)
 		return 0;
 	}
 
+	uci_foreach_element_safe(&pkg->sections, tmp, se)
+	{
+		s = uci_to_section(se);
+		print_debug_log("[debug]  %p %s \n", s->type, s->e.name);
+		if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL)
+			uci_set_cfg(ctx, s->e.name, "wifi-iface", "disabled", "1");
+	}
+
+	if (strlen(rcvinfo.channel) != 0)
+		uci_set_cfg(ctx, "radio0", "wifi-device", "channel", rcvinfo.channel);
+	if (strlen(rcvinfo.txpower) != 0)
+		uci_set_cfg(ctx, "radio0", "wifi-device", "txpower", rcvinfo.txpower);
+
 	for (i = 0; i < MAX_TEMPLATE; i++) {
-		sprintf(buf, "__cfg_from_ac_%d", i);
+		sprintf(buf, "__auto_gen_by_ac_%d", i);
 		if (i < n) {
 			if (ssid[i])
 				uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
 			if (encrypt[i])
 				uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
-			if (key[i])
+			if (key[i] && key[i][0] != 0)
 				uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
 			uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
 			uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
