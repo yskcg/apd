@@ -95,6 +95,9 @@ int sproto_encode_cb(void *ud, const char *tagname, int type, int index, struct 
 			return sz;
 		}
 		case SPROTO_TSTRUCT: {
+			if (strcasecmp(tagname, "smac") == 0 && self->stamac[macnum] == NULL)
+				return 0;
+
 			int r = sproto_encode(st, value, length, sproto_encode_cb, self);
 			return r;
 		}
@@ -568,16 +571,19 @@ int proc_status_cmd(apcmd *cmd)
 
 int get_ap_revision(void)
 {
-	char sver[50], hver[50];
+	char sver[50], hver[50], model[50];
 	bzero(sver, sizeof(sver));
 	bzero(hver, sizeof(hver));
 	if (open_file("/etc/openwrt_release", sver, "RELEASE") <= 0)
 		return 0;
 	if (open_file("/etc/device_info", hver, "REVISION") <= 0)
 		return 0;
+	if (open_file("/etc/device_info", model, "PRODUCT") <= 0)
+		return 0;
 	strncpy(apinfo.hver, hver, 30);
 	strncpy(apinfo.sver, sver, 30);
-	print_debug_log("[debug][sw:%s, hw:%s]\n", sver, hver);
+	strncpy(apinfo.model, model, 30);
+	print_debug_log("[debug][sw:%s, hw:%s model:%s]\n", sver, hver, model);
 	return 1;
 }
 
@@ -744,6 +750,8 @@ int fill_encode_data(ApCfgInfo *apcfg,char *tagname, char *value)
 		strcpy(value, apcfg->apmac);
 	else if (strcasecmp(tagname, "sn") == 0)
 		strcpy(value, apcfg->sn);
+	else if (strcasecmp(tagname, "model") == 0)
+		strcpy(value, apcfg->model);
 	else if (strcasecmp(tagname, "aip") == 0)
 		strcpy(value, apcfg->aip);
 	else if (strcasecmp(tagname, "txpower") == 0)
@@ -927,14 +935,24 @@ void print_debug_log(const char *form ,...)
 void get_sn(void)
 {
 	FILE *fp;
-	char data[1024], sn[20] = {0};
+	int i;
+	char *p;
+	char data[1024];
 	if ((fp = fopen("/etc/sn", "r")) == NULL)
 		return;
 	memset(data, 0, sizeof(data));
 	fgets(data, sizeof(data), fp);
 	fclose(fp);
-	strncpy(sn, data, 14);
-	strcpy(apinfo.sn, sn);
+
+	i = 0;
+	p = data;
+	while (i < 14 && *p != 0 && *p != '\r' && *p != '\n') {
+		if (*p != '\t' && *p != ' ')
+			apinfo.sn[i++] = *p;
+		p++;
+	}
+	apinfo.sn[i] = 0;
+
 	return;
 }
 

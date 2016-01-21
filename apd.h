@@ -127,6 +127,7 @@ typedef struct ap_cfg_info
 	     channel[5],
 	     encrypt[50],
 	     hver[30],
+	    model[30],
 	     sver[30],
 	     key[300],
 	     aip[20],
@@ -160,27 +161,6 @@ const char *ap_iwinfo[] = { "wireless.@wifi-iface[0].device",
 	"wireless.@wifi-device[0].channel",
 	"wireless.@wifi-device[0].hwmode",
 	"wireless.@wifi-device[0].htmode",
-	0};
-
-static char *ap_cfg_opt[] = {"mac",
-	"hver",
-	"sver",
-	"rip",
-	"aip",
-	"ssid",
-	"mode",
-	"encryption",
-	"update",
-	"channel",
-	"key",
-	"status",
-	"network",
-	"device",
-	0};
-
-static char *dev_opt[] = {
-	"channel",
-	"txpower",
 	0};
 
 void print_debug_log(const char *form ,...);
