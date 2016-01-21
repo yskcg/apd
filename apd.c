@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <string.h>
 
+char ac[20];
 static struct sproto *spro_new;
 static ApCfgInfo apinfo, rcvinfo;
 apcmd cmdinfo;
@@ -19,7 +20,7 @@ int proc_status_cmd(apcmd *cmd);
 void rcv_and_proc_data(struct uloop_fd *fd, unsigned int events);
 static void get_sta_info(void);
 int get_netcard_mac(void);
-int create_socket(char *gw);
+int create_socket();
 
 int memcat(char *res, char *buf, int slen, int len)
 {
@@ -832,7 +833,7 @@ int get_sta_mac(char mac[][18], struct encode_ud *ud)
 void  ap_connect_status(struct uloop_timeout *t)
 {
 	int len, size;
-	char res[1024 * 6] = {0}, gw[20] = {0};
+	char res[1024 * 6] = {0};
 	struct encode_ud ud;
 
 	memset(&ud, 0, sizeof(struct encode_ud));
@@ -846,7 +847,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 		sfd = 0;
 		while(1)
 		{
-			if (create_socket(gw) == 0)
+			if (create_socket() == 0)
 				break;
 			sleep(2);
 		}
@@ -1078,23 +1079,31 @@ void get_host_ip(char *hostip)
 	return;
 }
 
-int create_socket(char *igw)
+int create_socket()
 {
 	//struct sockaddr_in loc_addr;
 	struct sockaddr_in remo_addr;
 	char hostip[INET_ADDRSTRLEN] = {0}, gw[20] = {0};
 
-	if (is_ip(igw) > 0)
-		strncpy(gw, igw, 20);
-	if (is_ip(gw) <= 0)
+	char cmd[256];
+
+	if (is_ip(ac) > 0)
+		strncpy(gw, ac, 20);
+	else {
 		get_gateway_ip(gw);
-	if (is_ip(gw) <= 0)
-		return -1;
+		if (is_ip(gw) <= 0)
+			return -1;
+	}
+
 	print_debug_log("[debug] [gw ip:%s]\n", gw);
+
+	sprint(cmd, "ping -q -c 3 %s || killall udhcpc", gw)
+	system(cmd);
 
 	get_host_ip(hostip);
 	if (is_ip(hostip) <= 0)
 		return -1;
+
 	strcpy(apinfo.aip, hostip);
 	/*
   memset(&loc_addr, 0, sizeof(loc_addr));
@@ -1139,7 +1148,6 @@ int main(int argc, char **argv)
 {
 	int ch;
 	const char *ubus_socket = NULL;
-	char gw[20] = {0};
 	while ((ch = getopt(argc, argv, "dt:i:")) != -1) {
 		switch(ch) {
 			case 'd':
@@ -1152,7 +1160,7 @@ int main(int argc, char **argv)
 				ubus_socket = optarg;
 				break;
 			case 'i':
-				strcpy(gw, optarg);
+				strcpy(ac, optarg);
 				break;
 			default:
 				return usage(argv[0]);
@@ -1162,7 +1170,7 @@ int main(int argc, char **argv)
 	memset(&cmdinfo, 0, sizeof(apcmd));
 	while(1)
 	{
-		if (create_socket(gw) == 0)
+		if (create_socket() == 0)
 			break;
 		sleep(2);
 	}
