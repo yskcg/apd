@@ -237,7 +237,7 @@ int sproto_proc_data(int fd, char *data, int len)
 		{
 			if (live == 0) {
 				live = 1;
-				system("(/etc/init.d/authd disable; /etc/init.d/authd stop)");
+				system("(/etc/init.d/authd disable; /etc/init.d/authd stop; uci delete firewall._auth && uci commit firewall && /etc/init.d/firewall restart)");
 			}
 			conn_tmout = 0;
 			return 1;
