@@ -1097,7 +1097,7 @@ int create_socket()
 
 	print_debug_log("[debug] [gw ip:%s]\n", gw);
 
-	sprint(cmd, "ping -q -c 3 %s || killall udhcpc", gw)
+	sprint(cmd, "ping -q -c 3 %s || killall udhcpc", gw);
 	system(cmd);
 
 	get_host_ip(hostip);
