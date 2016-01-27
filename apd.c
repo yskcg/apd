@@ -237,7 +237,9 @@ int sproto_proc_data(int fd, char *data, int len)
 		{
 			if (live == 0) {
 				live = 1;
-				system("(/etc/init.d/authd disable; /etc/init.d/authd stop; uci delete firewall._auth && uci commit firewall && /etc/init.d/firewall restart)");
+				system("(ubus call auth status_led '{\"status\":\"ok\"}')");
+				system("(/etc/init.d/authd disable; /etc/init.d/authd stop)");
+				system("(uci delete firewall._auth && uci commit firewall && /etc/init.d/firewall restart)");
 			}
 			conn_tmout = 0;
 			return 1;
@@ -845,6 +847,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 			close(sfd);
 		}
 		sfd = 0;
+
 		while(1)
 		{
 			if (create_socket() == 0)
@@ -855,7 +858,6 @@ void  ap_connect_status(struct uloop_timeout *t)
 		uloop_fd_add(&apufd, ULOOP_READ);
 		ap_post_data();
 		conn_tmout = 0;
-		live = 0;
 		goto timeset;
 	}
 	char mac[32][18] = {{0}};
@@ -1087,6 +1089,11 @@ int create_socket()
 
 	char cmd[256];
 
+	if (live == 1) {
+		live = 0;
+		system("(ubus call auth status_led '{\"status\":\"linklost\"}')");
+	}
+
 	if (is_ip(ac) > 0)
 		strncpy(gw, ac, 20);
 	else {
@@ -1168,6 +1175,9 @@ int main(int argc, char **argv)
 	}
 	memset(&apinfo, 0, sizeof(ApCfgInfo));
 	memset(&cmdinfo, 0, sizeof(apcmd));
+
+	// authd may change status_led
+	//system("(ubus call auth status_led '{\"status\":\"linklost\"}')");
 	while(1)
 	{
 		if (create_socket() == 0)
