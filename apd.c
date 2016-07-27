@@ -459,7 +459,7 @@ int get_netcard_mac(void)
 	}
 
 	memset(&buffer, 0, sizeof(struct ifreq));
-	strcpy(buffer.ifr_name, "wlan0");
+	strcpy(buffer.ifr_name, "br-lan");
 	ioctl(sockfd, SIOCGIFHWADDR, &buffer);
 	close(sockfd);
 
@@ -626,6 +626,9 @@ int del_wireless_cfg(struct uci_context *c, char *section, char *option)
 		.package = "wireless",
 		.section = section,
 	};
+	if(option){
+		ptr.option = option;
+	}
 	print_debug_log("[debug] [del cfg] [sec:%s, opt:%s]\n", section, option);
 	uci_delete(c, &ptr); //写入配置
 	uci_commit(c, &ptr.p, false); //提交保存更改
@@ -708,12 +711,42 @@ int set_ap_cfg(void)
 		return 0;
 	}
 
-	uci_foreach_element_safe(&pkg->sections, tmp, se)
-	{
-		s = uci_to_section(se);
-		print_debug_log("[debug]  %p %s \n", s->type, s->e.name);
-		if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL)
-			uci_set_cfg(ctx, s->e.name, "wifi-iface", "disabled", "1");
+	if(strcmp(apinfo.model,"MA500AC") == 0){
+		uci_foreach_element_safe(&pkg->sections,tmp,se){
+			s = uci_to_section(se);
+			print_debug_log("[debug] %s,%d %p %s \n", __FUNCTION__,__LINE__,s->type, s->e.name);
+
+			/*change the wifi-iface*/
+			if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL){
+				if (ssid[i])
+					uci_set_cfg(ctx, s->e.name, s->type, "ssid", ssid[i]);
+				if (encrypt[i]){
+					uci_set_cfg(ctx, s->e.name, s->type, "encryption", encrypt[i]);
+					if (strcmp(encrypt[i],"none") == 0 ){
+						del_wireless_cfg(ctx, s->e.name,"key");
+					}
+				}
+				if (key[i] && key[i][0] != 0)
+					uci_set_cfg(ctx, s->e.name, s->type, "key", key[i]);
+				uci_set_cfg(ctx, s->e.name, s->type , "mode", "ap");
+				uci_set_cfg(ctx, s->e.name, s->type, "network", "lan");
+			}
+			if (strstr(s->e.name,"radio0") != NULL){
+				if (strlen(rcvinfo.channel) != 0)
+					uci_set_cfg(ctx, s->e.name,s->type, "channel", rcvinfo.channel);
+				if (strlen(rcvinfo.txpower) != 0)
+					uci_set_cfg(ctx, s->e.name,s->type, "txpower", rcvinfo.txpower);
+			}
+		}
+			goto done;
+	}else{
+		uci_foreach_element_safe(&pkg->sections, tmp, se){
+			s = uci_to_section(se);
+			print_debug_log("[debug] %s,%d %p %s \n", __FUNCTION__,__LINE__,s->type, s->e.name);
+
+			if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL)
+				uci_set_cfg(ctx, s->e.name, "wifi-iface", "disabled", "1");
+		}
 	}
 
 	if (strlen(rcvinfo.channel) != 0)
@@ -737,6 +770,8 @@ int set_ap_cfg(void)
 			del_wireless_cfg(ctx, buf, NULL);
 		}
 	}
+
+done:
 	uci_free_context(ctx);
 	ctx = NULL;
 	system("wifi restart");
@@ -1157,6 +1192,12 @@ int main(int argc, char **argv)
 {
 	int ch;
 	const char *ubus_socket = NULL;
+	char network_mode[32] = {0};
+	FILE *network_fp = NULL;
+	struct stat st;
+	long int size;
+	long int read_size;
+
 	while ((ch = getopt(argc, argv, "dt:i:")) != -1) {
 		switch(ch) {
 			case 'd':
@@ -1177,6 +1218,27 @@ int main(int argc, char **argv)
 	}
 	memset(&apinfo, 0, sizeof(ApCfgInfo));
 	memset(&cmdinfo, 0, sizeof(apcmd));
+	/*wan mode exit*/
+	bzero(network_mode, sizeof(network_mode));
+	system(". /sbin/network_mode.sh");
+	network_fp = fopen("/tmp/log/network_mode","r");
+	if (! network_fp){
+		return 0;
+	}
+
+	stat("/tmp/log/network_mode", &st);
+	size = st.st_size;
+	if (size >32){
+		size = 32;
+	}
+	read_size = fread(network_mode,size,1,network_fp);
+	if(read_size <= 0){
+		return 0;
+	}
+	if (strstr(network_mode,"route")){
+		printf("route mode\n");
+		return 0;//route mode exit the process ;
+	}
 
 	// authd may change status_led
 	//system("(ubus call sysd status_led '{\"status\":\"linklost\"}')");
