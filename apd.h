@@ -26,6 +26,9 @@
 #include <libubox/ustream.h>
 #include <libubox/blobmsg_json.h>
 #include <libubus.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "sproto.h"
 
 
@@ -179,5 +182,3 @@ int proc_update(char *upd);
 
 
 #endif
-
-
