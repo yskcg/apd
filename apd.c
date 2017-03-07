@@ -128,8 +128,9 @@ int sproto_encode_data(struct encode_ud *ud, char *res)
 		return 0;
 	}
 
-	if((rpc_len = sproto_encode(pro_type, pro_buf, ud->len, sproto_encode_cb, ud)) < 0)
+	if((rpc_len = sproto_encode(pro_type, pro_buf, ud->len, sproto_encode_cb, ud)) < 0){
 		return 0;
+	}
 	memcat(buf, pro_buf, header_len, rpc_len);
 
 	int size = sproto_pack(buf, header_len + rpc_len, res, sizeof(buf));
@@ -499,6 +500,22 @@ int get_ip_in_dhcp_opt(char *file, char *ip)
 	return is_ip(ip);
 }
 
+void get_ac_dns_address(char *ip)
+{
+	struct hostent *h;
+	struct in_addr addr;
+
+	if((h=gethostbyname(AC_DNS_DOMAIN))==NULL){
+		print_debug_log("%s,%d Can't get the IP\n",__FUNCTION__,__LINE__);
+		return;
+	}
+
+	strcpy(ip,inet_ntoa(*((struct in_addr *)h->h_addr)));
+	print_debug_log("%s,%d AC address:%s---%s\n",__FUNCTION__,__LINE__,ip,inet_ntoa(*((struct in_addr *)h->h_addr)));
+
+	return ;
+}
+
 int get_gateway_ip(char *ip)
 {
 	char ifname[20];
@@ -515,6 +532,7 @@ int get_gateway_ip(char *ip)
 	}
 	return 0;
 }
+
 
 static int usage(char *prog)
 {
@@ -824,17 +842,22 @@ int ap_post_data(void)
 	struct encode_ud ud;
 	char res[2056] = {0};
 	int size, len;
-	if (strcasecmp(apinfo.apmac, "00:00:00:00:00:00") == 0)
+
+	if (strcasecmp(apinfo.apmac, "00:00:00:00:00:00") == 0){
 		return -1;
+	}
+
 	memset(&ud, 0, sizeof(struct encode_ud));
 	ud.type = AP_STATUS;
 	ud.session = SPROTO_REQUEST;
 	ud.stamac[0] = NULL;
 	ud.len = 200;
+
 	if ((size = sproto_encode_data(&ud, res)) <= 0){
 		print_debug_log("[debug] [encode data failed!]\n");
 		return 0;
 	}
+
 	if (sfd <= 0)
 		return 0;
 	len = write(sfd, res, size);
@@ -882,6 +905,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 		{
 			uloop_fd_delete(&apufd);
 			close(sfd);
+			print_debug_log("%s,%d\n",__FUNCTION__,__LINE__,conn_tmout);
 		}
 		sfd = 0;
 
@@ -1102,16 +1126,23 @@ void get_host_ip(char *hostip)
 	void * tmpAddrPtr = NULL;
 
 	getifaddrs(&ifAddrS);
-	while (ifAddrS != NULL)
-	{
-		if (ifAddrS->ifa_addr->sa_family == AF_INET)
-		{
-		  tmpAddrPtr = &((struct sockaddr_in *)ifAddrS->ifa_addr)->sin_addr;
-		  inet_ntop(AF_INET, tmpAddrPtr, hostip, INET_ADDRSTRLEN);
+
+	while (ifAddrS != NULL){
+		if (ifAddrS->ifa_addr == NULL){
+            continue;
 		}
+
+		if (ifAddrS->ifa_addr->sa_family == AF_INET ){
+			tmpAddrPtr = &((struct sockaddr_in *)ifAddrS->ifa_addr)->sin_addr;
+
+			if (strcasecmp(tmpAddrPtr,DEFAULT_DEVICE_IP) !=0){
+				inet_ntop(AF_INET, tmpAddrPtr, hostip, INET_ADDRSTRLEN);
+			}
+		}
+
 		tifad = ifAddrS;
 		ifAddrS = ifAddrS->ifa_next;
-		free(tifad);
+		freeifaddrs(tifad);
 		tifad = NULL;
 	}
 
@@ -1122,7 +1153,10 @@ int create_socket()
 {
 	//struct sockaddr_in loc_addr;
 	struct sockaddr_in remo_addr;
-	char hostip[INET_ADDRSTRLEN] = {0}, gw[20] = {0};
+	char hostip[INET_ADDRSTRLEN] = {0};
+	char gw[20] = {0};
+	char ac_addr[32] = {'\0'};
+	struct timeval timeout;
 
 	char cmd[256];
 
@@ -1132,16 +1166,24 @@ int create_socket()
 	}
 
 	if (is_ip(ac) > 0)
-		strncpy(gw, ac, 20);
+		strncpy(ac_addr, ac, 20);
 	else {
-		get_gateway_ip(gw);
-		if (is_ip(gw) <= 0)
-			return -1;
+		/*1:first detect the ac dns domain*/
+		get_ac_dns_address(ac_addr);
+		if (is_ip(ac_addr) <=0){
+			/*2:if can't get the ac dns domain ,go to find the gateway address or option 43*/
+			memset(ac_addr,'\0',sizeof(ac_addr));
+			get_gateway_ip(ac_addr);
+
+			if (is_ip(ac_addr) <= 0){
+				return -1;
+			}
+		}
 	}
 
-	print_debug_log("[debug] [gw ip:%s]\n", gw);
+	print_debug_log("[debug] [ac_addr ip:%s]\n", ac_addr);
 
-	sprintf(cmd, "ping -q -c 3 %s || killall udhcpc", gw);
+	sprintf(cmd, "ping -q -c 3 %s || killall udhcpc", ac_addr);
 	system(cmd);
 
 	get_host_ip(hostip);
@@ -1149,40 +1191,21 @@ int create_socket()
 		return -1;
 
 	strcpy(apinfo.aip, hostip);
-	/*
-  memset(&loc_addr, 0, sizeof(loc_addr));
-  loc_addr.sin_family = AF_INET;
-  loc_addr.sin_addr.s_addr = inet_addr(hostip);
-  loc_addr.sin_port = htons(0);
 
-	memset(&remo_addr, 0, sizeof(remo_addr));
-	*/
 	if((sfd = socket(AF_INET, SOCK_STREAM, 0)) <= 0){
 		print_debug_log("Create Socket Failed!\n");
 		return -1;
 	}
-	  /*
-	if(bind(sfd, (struct sockaddr*)&loc_addr, sizeof(loc_addr)))
-  {
-      print_debug_log("Client Bind Port Failed!\n");
-			close(sfd);
-      return -1;
-  }
-  */
-	/*
-	if (inet_aton(gw, &remo_addr.sin_addr) == 0) {
-		print_debug_log("[debug] [Server IP Address Error!]\n");
-		close(sfd);
-		return -1;
-	}*/
+
 	remo_addr.sin_family = AF_INET;
 	remo_addr.sin_port = htons(SERVER_PORT);
-	remo_addr.sin_addr.s_addr = inet_addr(gw);
+	remo_addr.sin_addr.s_addr = inet_addr(ac_addr);
 	if(connect(sfd, (struct sockaddr*)&remo_addr, (socklen_t)sizeof(remo_addr)) < 0){
-		print_debug_log("[debug] [Can Not Connect To %s!]\n", gw);
+		print_debug_log("[debug] [Can Not Connect To %s!]\n", ac_addr);
 		close(sfd);
 		return -1;
 	}
+
 	apufd.cb = rcv_and_proc_data;
 	apufd.fd = sfd;
 	return 0;

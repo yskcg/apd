@@ -29,28 +29,35 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <netdb.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include "sproto.h"
 
 
 #ifndef LINE_MAX
-#define LINE_MAX	1024 * 3
+#define LINE_MAX			1024 * 3
 #endif
 
-#define SIZEOF_LENGTH 4
-#define ENCODE_BUFFERSIZE 2050
-#define ENCODE_MAXSIZE 0x1000000
-#define ENCODE_DEEPLEVEL 64
-#define BUFLEN 1024 * 2
-#define BUFSIZE 8192
-#define AP_STATUS				1
-#define AP_INFO				  2
-#define AP_CMD					3
-#define RESPONSE_ERROR	0
-#define RESPONSE_PACK	  0
-#define RESPONSE_OK		  1
-#define REBOOT  				1
-#define UPGRADE				  2
-#define AP_ON						1
+#define SIZEOF_LENGTH 		4
+#define ENCODE_BUFFERSIZE 	2050
+#define ENCODE_MAXSIZE 		0x1000000
+#define ENCODE_DEEPLEVEL 	64
+#define BUFLEN 				1024 * 2
+#define BUFSIZE 			8192
+#define AP_STATUS			1
+#define AP_INFO				2
+#define AP_CMD				3
+#define RESPONSE_ERROR		0
+#define RESPONSE_PACK	  	0
+#define RESPONSE_OK		  	1
+#define REBOOT  			1
+#define UPGRADE				2
+#define AP_ON				1
+
+#define AC_DNS_DOMAIN  		"www.morewifi.ac.com"
+#define DEFAULT_DEVICE_IP	"192.168.33.111"
 
 
 FILE *debug = NULL;
