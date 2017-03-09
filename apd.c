@@ -449,25 +449,46 @@ int get_ip_in_cfgfile(char *file, char *ip)
 
 int get_netcard_mac(void)
 {
-	int sockfd;
-	struct ifreq buffer;
-	unsigned char *hw_addr;
+	/*get the mac address from flash*/
+	int file_size;
+	char shell_cmd[128] = {'\0'};
+	char buf[32] = {'\0'};
+	FILE *fp = NULL;
 
-	sockfd = socket(PF_INET, SOCK_DGRAM, 0);
-	if (sockfd <= 0) {
-		fputs("Can not create socket!\n", stderr);
-		return 0;
+	sprintf(shell_cmd," . /usr/sbin/get_mac.sh");
+	system(shell_cmd);
+
+	sleep(1);
+
+	if (access(MAC_ADDRESS_FILE,F_OK) !=0){
+		return -1;
 	}
 
-	memset(&buffer, 0, sizeof(struct ifreq));
-	strcpy(buffer.ifr_name, "br-lan");
-	ioctl(sockfd, SIOCGIFHWADDR, &buffer);
-	close(sockfd);
+	if ((fp = fopen(MAC_ADDRESS_FILE, "r")) == NULL){
+		return;
+	}
 
-	hw_addr = (unsigned char *)&buffer.ifr_hwaddr.sa_data;
+	fseek(fp, 0, SEEK_END);
+	file_size = ftell(fp);
 
-	sprintf(apinfo.apmac, "%02x:%02x:%02x:%02x:%02x:%02x",
-			hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5]);
+	if (file_size == 0){
+		fclose(fp);
+		return;
+	}
+
+	fseek(fp,0,SEEK_SET);
+	/*get the aplist file content*/
+	while((fgets(buf,32,fp))!=NULL){
+		/*get the mac address of ap*/
+		if (!(strlen(buf) <=1 && buf[0] ==10)){
+			memset(apinfo.apmac,'\0',sizeof(apinfo.apmac));
+			strncpy(apinfo.apmac,buf,strlen(buf));
+			memset(buf,'\0',sizeof(buf));
+		}
+	}
+
+	fclose(fp);
+
 	return 1;
 }
 
@@ -1154,10 +1175,7 @@ int create_socket()
 	//struct sockaddr_in loc_addr;
 	struct sockaddr_in remo_addr;
 	char hostip[INET_ADDRSTRLEN] = {0};
-	char gw[20] = {0};
 	char ac_addr[32] = {'\0'};
-	struct timeval timeout;
-
 	char cmd[256];
 
 	if (live == 1) {
