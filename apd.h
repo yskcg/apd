@@ -58,6 +58,7 @@
 
 #define AC_DNS_DOMAIN  		"www.morewifi.ac.com"
 #define DEFAULT_DEVICE_IP	"192.168.33.111"
+#define MAC_ADDRESS_FILE    "/tmp/mac_address"
 
 
 FILE *debug = NULL;
