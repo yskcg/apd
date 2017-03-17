@@ -917,6 +917,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 {
 	int len, size;
 	char res[1024 * 6] = {0};
+	char mac[32][18] = {{0}};
 	struct encode_ud ud;
 
 	memset(&ud, 0, sizeof(struct encode_ud));
@@ -942,7 +943,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 		conn_tmout = 0;
 		goto timeset;
 	}
-	char mac[32][18] = {{0}};
+
 	get_sta_info();
 	cmdinfo.stanum = get_sta_mac(mac, &ud);
 	cmdinfo.status = AP_ON;
@@ -1186,7 +1187,9 @@ int create_socket()
 	if (is_ip(ac) > 0)
 		strncpy(ac_addr, ac, 20);
 	else {
-		/*1:first detect the ac dns domain*/
+		/*1stop the dnsmasq*/
+		system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
+		/*2:first detect the ac dns domain*/
 		get_ac_dns_address(ac_addr);
 		if (is_ip(ac_addr) <=0){
 			/*2:if can't get the ac dns domain ,go to find the gateway address or option 43*/
@@ -1276,13 +1279,16 @@ int main(int argc, char **argv)
 	if(read_size <= 0){
 		return 0;
 	}
+
+	/*route mode exit the process*/
 	if (strstr(network_mode,"route")){
 		printf("route mode\n");
-		return 0;//route mode exit the process ;
+		return 0;
 	}
 
-	// authd may change status_led
-	//system("(ubus call sysd status_led '{\"status\":\"linklost\"}')");
+	/*stop the dnsmasq*/
+	system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
+
 	while(1)
 	{
 		if (create_socket() == 0)
