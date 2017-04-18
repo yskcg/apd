@@ -243,6 +243,8 @@ int sproto_proc_data(int fd, char *data, int len)
 				system("(uci delete firewall._auth && uci commit firewall && /etc/init.d/firewall restart)");
 
 				system("(ubus call sysd status_led '{\"status\":\"ok\"}')");
+				/*stop the dnsmasq*/
+				system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
 			}
 			conn_tmout = 0;
 			return 1;
@@ -1285,9 +1287,6 @@ int main(int argc, char **argv)
 		printf("route mode\n");
 		return 0;
 	}
-
-	/*stop the dnsmasq*/
-	system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
 
 	while(1)
 	{
