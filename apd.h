@@ -55,9 +55,13 @@
 #define REBOOT  			1
 #define UPGRADE				2
 #define AP_ON				1
+#define MAX_ITEM_LEN 		(128)
+#define MAX_TEMPLATE 		(8)
+#define MAC_WIFI_DEVICES	4
 
 #define AC_DNS_DOMAIN  		"www.morewifi.ac.com"
 #define DEFAULT_DEVICE_IP	"192.168.33.111"
+#define HOST_IP_FILE		"/tmp/host_ip"
 #define MAC_ADDRESS_FILE    "/tmp/mac_address"
 
 
@@ -164,6 +168,14 @@ struct route_info
 	u_int gateWay;
 	char ifName[IF_NAMESIZE];
 };
+
+typedef struct{
+	char name[64];
+	char hwmode[32];
+	char htmode[32];
+	char channel[32];
+	char txpower[32];
+}wifi_device;
 
 const char *ap_iwinfo[] = { "wireless.@wifi-iface[0].device",
 	"wireless.@wifi-iface[0].network",

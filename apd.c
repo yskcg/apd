@@ -526,7 +526,6 @@ int get_ip_in_dhcp_opt(char *file, char *ip)
 void get_ac_dns_address(char *ip)
 {
 	struct hostent *h;
-	struct in_addr addr;
 
 	if((h=gethostbyname(AC_DNS_DOMAIN))==NULL){
 		print_debug_log("%s,%d Can't get the IP\n",__FUNCTION__,__LINE__);
@@ -694,8 +693,7 @@ int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, 
 	return 1;
 }
 
-#define MAX_ITEM_LEN (128)
-#define MAX_TEMPLATE (64)
+
 static int my_strtok(char *src, char *dst[], int n)
 {
 	char *p;
@@ -729,7 +727,13 @@ int set_ap_cfg(void)
 	struct uci_element *se, *tmp;
 	struct uci_section *s;
 	char path[] = "/etc/config/wireless";
-	int i = 0;
+	int i ,j= 0;
+	int wifi_iface_number = 0;
+	int wifi_device_number = 0;
+	char *option_value = NULL;
+	wifi_device device_info[MAC_WIFI_DEVICES] = {0};
+
+
 	ctx = uci_alloc_context();
 	if (ctx == NULL)
 		return 0;
@@ -752,67 +756,87 @@ int set_ap_cfg(void)
 		return 0;
 	}
 
-	if(strcmp(apinfo.model,"MA500AC") == 0){
-		uci_foreach_element_safe(&pkg->sections,tmp,se){
-			s = uci_to_section(se);
-			print_debug_log("[debug] %s,%d %p %s \n", __FUNCTION__,__LINE__,s->type, s->e.name);
+	uci_foreach_element_safe(&pkg->sections, tmp, se){
+		s = uci_to_section(se);
+		print_debug_log("[debug] %s,%d %s %s \n", __FUNCTION__,__LINE__,s->type, s->e.name);
 
-			/*change the wifi-iface*/
-			if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL){
-				if (ssid[i])
-					uci_set_cfg(ctx, s->e.name, s->type, "ssid", ssid[i]);
-				if (encrypt[i]){
-					uci_set_cfg(ctx, s->e.name, s->type, "encryption", encrypt[i]);
-					if (strcmp(encrypt[i],"none") == 0 ){
-						del_wireless_cfg(ctx, s->e.name,"key");
-					}
-				}
-				if (key[i] && key[i][0] != 0)
-					uci_set_cfg(ctx, s->e.name, s->type, "key", key[i]);
-				uci_set_cfg(ctx, s->e.name, s->type , "mode", "ap");
-				uci_set_cfg(ctx, s->e.name, s->type, "network", "lan");
-			}
-			if (strstr(s->e.name,"radio0") != NULL){
-				if (strlen(rcvinfo.channel) != 0)
-					uci_set_cfg(ctx, s->e.name,s->type, "channel", rcvinfo.channel);
-				if (strlen(rcvinfo.txpower) != 0)
-					uci_set_cfg(ctx, s->e.name,s->type, "txpower", rcvinfo.txpower);
-			}
+		if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL){
+			uci_set_cfg(ctx, s->e.name, "wifi-iface", "disabled", "1");
 		}
-			goto done;
-	}else{
-		uci_foreach_element_safe(&pkg->sections, tmp, se){
-			s = uci_to_section(se);
-			print_debug_log("[debug] %s,%d %p %s \n", __FUNCTION__,__LINE__,s->type, s->e.name);
+		
+		if (strcmp(s->type, "wifi-device") == 0 && strstr(s->e.name, "radio") != NULL){
+			memcpy(device_info[wifi_device_number].name,s->e.name,strlen(s->e.name) +1);
+			print_debug_log("[debug] %s,%d name:%s sizeof:%d strlen:%d\n",__FUNCTION__,__LINE__,device_info[wifi_device_number].name,\
+								sizeof(s->e.name),strlen(s->e.name));
+			option_value = uci_lookup_option_string(ctx,s,"hwmode");
+			if (option_value){
+				memcpy(device_info[wifi_device_number].hwmode,option_value,sizeof(option_value));
+				print_debug_log("[debug] %s,%d hwmode:%s\n",__FUNCTION__,__LINE__,option_value);
+			}
+			option_value = uci_lookup_option_string(ctx,s,"htmode");
+			if (option_value){
+				memcpy(device_info[wifi_device_number].htmode,option_value,sizeof(option_value));
+				print_debug_log("[debug] %s,%d htmode:%s\n",__FUNCTION__,__LINE__,option_value);
+			}
+			option_value = uci_lookup_option_string(ctx,s,"channel");
+			if (option_value){
+				memcpy(device_info[wifi_device_number].channel,option_value,sizeof(option_value));
+				print_debug_log("[debug] %s,%d channel:%s\n",__FUNCTION__,__LINE__,option_value);
+			}
+			option_value = uci_lookup_option_string(ctx,s,"txpower");
+			if (option_value){
+				memcpy(device_info[wifi_device_number].txpower,option_value,sizeof(option_value));
+				print_debug_log("[debug] %s,%d txpower:%s\n",__FUNCTION__,__LINE__,option_value);
+			}
 
-			if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL)
-				uci_set_cfg(ctx, s->e.name, "wifi-iface", "disabled", "1");
+			wifi_device_number = wifi_device_number +1;
+
+		}
+
+	}
+
+	if (strlen(rcvinfo.channel) != 0){
+		for(i=0;i<wifi_device_number;i++){
+			//Not support for 5G chang the channel
+			if(strstr(device_info[wifi_device_number].hwmode,"11a") == NULL ){
+				uci_set_cfg(ctx, "radio0", "wifi-device", "channel", rcvinfo.channel);
+			}
+
+			if (strlen(rcvinfo.txpower) != 0){
+				uci_set_cfg(ctx, "radio0", "wifi-device", "txpower", rcvinfo.txpower);
+			}
 		}
 	}
 
-	if (strlen(rcvinfo.channel) != 0)
-		uci_set_cfg(ctx, "radio0", "wifi-device", "channel", rcvinfo.channel);
-	if (strlen(rcvinfo.txpower) != 0)
-		uci_set_cfg(ctx, "radio0", "wifi-device", "txpower", rcvinfo.txpower);
 
-	for (i = 0; i < MAX_TEMPLATE; i++) {
-		sprintf(buf, "__auto_gen_by_ac_%d", i);
+	for (i = 0; i < MAX_TEMPLATE*MAC_WIFI_DEVICES ; i++) {
 		if (i < n) {
-			if (ssid[i])
-				uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
-			if (encrypt[i])
-				uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
-			if (key[i] && key[i][0] != 0)
-				uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
-			uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
-			uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
-			uci_set_cfg(ctx, buf, "wifi-iface", "device", "radio0");
+			for(j=0;j<wifi_device_number;j++){
+				sprintf(buf, "__auto_gen_by_ac_%d", wifi_iface_number);
+				if (ssid[i]){
+					uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
+				}
+				if (encrypt[i]){
+					uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
+				}
+				if (key[i] && key[i][0] != 0){
+					uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
+				}
+
+				uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
+				uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
+				uci_set_cfg(ctx, buf, "wifi-iface", "device", device_info[j].name);
+				wifi_iface_number = wifi_iface_number +1;
+			}
+
 		} else {
-			del_wireless_cfg(ctx, buf, NULL);
+			if( i >wifi_iface_number){
+				sprintf(buf, "__auto_gen_by_ac_%d", i);
+				del_wireless_cfg(ctx, buf, NULL);
+			}
 		}
 	}
 
-done:
 	uci_free_context(ctx);
 	ctx = NULL;
 	system("wifi restart");
@@ -1146,31 +1170,50 @@ static void get_sta_info(void)
 
 void get_host_ip(char *hostip)
 {
-	struct ifaddrs * ifAddrS = NULL, *tifad = NULL;
-	void * tmpAddrPtr = NULL;
+	char shell_cmd[128] = {'\0'};
+    int file_size;
+    char buf[32] = {'\0'};
+    FILE *fp = NULL;
+	
+	memset(hostip,'\0',sizeof(hostip));
+	sprintf(shell_cmd,"ip -4 addr show dev br-lan | grep inet | awk '{print$2}' | sed -e 's/\\/.*//g' | sed -e '/%s/d' >%s",DEFAULT_DEVICE_IP,HOST_IP_FILE);
+	
+	print_debug_log("%s %d shell_cmd:%s\n",shell_cmd);
+    system(shell_cmd);
 
-	getifaddrs(&ifAddrS);
+    if (access(HOST_IP_FILE,F_OK) !=0){
+        return ;
+    }
 
-	while (ifAddrS != NULL){
-		if (ifAddrS->ifa_addr == NULL){
-            continue;
-		}
+    if ((fp = fopen(HOST_IP_FILE, "r")) == NULL){
+        return;
+    }
 
-		if (ifAddrS->ifa_addr->sa_family == AF_INET ){
-			tmpAddrPtr = &((struct sockaddr_in *)ifAddrS->ifa_addr)->sin_addr;
+    fseek(fp, 0, SEEK_END);
+    file_size = ftell(fp);
 
-			if (strcasecmp(tmpAddrPtr,DEFAULT_DEVICE_IP) !=0){
-				inet_ntop(AF_INET, tmpAddrPtr, hostip, INET_ADDRSTRLEN);
-			}
-		}
+    if (file_size == 0){
+        fclose(fp);
+        unlink(HOST_IP_FILE);
+        return;
+    }
 
-		tifad = ifAddrS;
-		ifAddrS = ifAddrS->ifa_next;
-		freeifaddrs(tifad);
-		tifad = NULL;
-	}
+    fseek(fp,0,SEEK_SET);
+    /*get the aplist file content*/
+    while((fgets(buf,32,fp))!=NULL){
+        /*get the mac address of ap*/
+        if (!(strlen(buf) <=1 && buf[0] ==10)){
+            strncpy(hostip,buf,strlen(buf));
+            memset(buf,'\0',sizeof(buf));
+        }
+    }
 
-	return;
+    fclose(fp);
+    unlink(HOST_IP_FILE);
+	hostip[strlen(hostip)-1] = '\0';
+	print_debug_log("%s %d hostip:%s\n",__FUNCTION__,__LINE__,hostip);
+    return ;
+
 }
 
 int create_socket()
@@ -1209,6 +1252,7 @@ int create_socket()
 	sprintf(cmd, "ping -q -c 3 %s || killall udhcpc", ac_addr);
 	system(cmd);
 
+
 	get_host_ip(hostip);
 	if (is_ip(hostip) <= 0)
 		return -1;
@@ -1219,7 +1263,7 @@ int create_socket()
 		print_debug_log("Create Socket Failed!\n");
 		return -1;
 	}
-
+	
 	remo_addr.sin_family = AF_INET;
 	remo_addr.sin_port = htons(SERVER_PORT);
 	remo_addr.sin_addr.s_addr = inet_addr(ac_addr);
