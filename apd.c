@@ -608,7 +608,10 @@ int proc_status_cmd(apcmd *cmd)
 	else if (cmd->cmd == UPGRADE)
 	{
 		close(sfd);
-		sprintf(addr, "sysupgrade %s", cmd->addr);
+		sprintf(addr, "wget %s -O %s", cmd->addr,"/tmp/ap_firmware.img");
+		system(addr);
+		memset(addr,'\0',sizeof(addr));
+		sprintf(addr, "sysupgrade %s", "/tmp/ap_firmware.img");
 		system(addr);
 	}
 	return 1;
