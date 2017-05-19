@@ -608,6 +608,7 @@ int proc_status_cmd(apcmd *cmd)
 	else if (cmd->cmd == UPGRADE)
 	{
 		close(sfd);
+		system("rm -rf /etc/config/wireless");
 		sprintf(addr, "wget %s -O %s", cmd->addr,"/tmp/ap_firmware.img");
 		system(addr);
 		memset(addr,'\0',sizeof(addr));
