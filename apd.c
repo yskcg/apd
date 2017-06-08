@@ -16,6 +16,11 @@ static struct uci_context *ctx = NULL;
 static struct ubus_context *uctx;
 static struct blob_buf b;
 
+//for station info
+static station_info sta_info;
+//for 5G netcard wireless mac address
+static char mac_address_5G[ETH_LEN] = {0};
+
 int proc_status_cmd(apcmd *cmd);
 void rcv_and_proc_data(struct uloop_fd *fd, unsigned int events);
 static void get_sta_info(void);
@@ -27,14 +32,60 @@ int memcat(char *res, char *buf, int slen, int len)
 	int i;
 	if (buf == NULL || len <= 0)
 		return 0;
-	for(i = 0; i < len; i++)
-	{
+	for(i = 0; i < len; i++){
 		res[i + slen] = buf[i];
 	}
 	res[i + slen] = 0;
 	return slen + len;
 }
 
+char char_to_data(const char ch)
+{
+    switch(ch)
+    {
+    case '0': return 0;
+    case '1': return 1;
+    case '2': return 2;
+    case '3': return 3;
+    case '4': return 4;
+    case '5': return 5;
+    case '6': return 6;
+    case '7': return 7;
+    case '8': return 8;
+    case '9': return 9;
+    case 'a':
+    case 'A': return 10;
+    case 'b':
+    case 'B': return 11;
+    case 'c':
+    case 'C': return 12;
+    case 'd':
+    case 'D': return 13;
+    case 'e':
+    case 'E': return 14;
+    case 'f':
+    case 'F': return 15;
+    }
+    return 0;
+}
+
+static void mac_string_to_value(unsigned char *mac,unsigned char *buf)
+{
+    int i;
+    int len;
+	const char * p_temp = mac;
+
+	if(mac && buf){
+		len = strlen((const char *)mac);
+		for (i=0;i<(len-5)/2;i++){
+			//mach_len = sscanf((const char *)mac+i*3,"%2x",&buf[i]);
+
+			buf[i] = char_to_data(*p_temp++) * 16;
+			buf[i] += char_to_data(*p_temp++);
+			p_temp++;
+		}
+	}
+}
 
 int sproto_read_entity(char *name)
 {
@@ -57,7 +108,7 @@ int sproto_read_entity(char *name)
 
 int sproto_encode_cb(void *ud, const char *tagname, int type, int index, struct sproto_type *st, void *value, int length)
 {
-	struct encode_ud *self = ud;
+	struct encode_ud *self = (encode_ud_info *)ud;
 	int sz;
 
 	if (length < 2 * SIZEOF_LENGTH)
@@ -65,45 +116,55 @@ int sproto_encode_cb(void *ud, const char *tagname, int type, int index, struct 
 
 	switch (type) {
 		case SPROTO_TINTEGER: {
-      if (strcasecmp(tagname, "type") == 0)
-	      *(uint32_t *)value = self->type;
-      else if (strcasecmp(tagname, "session") == 0)
-	      *(uint32_t *)value = self->session;
-      else if (strcasecmp(tagname, "apstatus") == 0)
-	      *(uint32_t *)value = cmdinfo.status;
-      else if (strcasecmp(tagname, "stanum") == 0)
-	      *(uint32_t *)value = cmdinfo.stanum;
-      print_debug_log("[debug] [encode] [%s:%d]\n", tagname, *(int *)value);
-      return 4;
-    }
+			if (strcasecmp(tagname, "type") == 0)
+				*(uint32_t *)value = self->type;
+			else if (strcasecmp(tagname, "session") == 0)
+				*(uint32_t *)value = self->session;
+			else if (strcasecmp(tagname, "apstatus") == 0)
+				*(uint32_t *)value = cmdinfo.status;
+			else if (strcasecmp(tagname, "stanum") == 0)
+				*(uint32_t *)value = cmdinfo.stanum;
+			else if (strcasecmp(tagname, "sta_status") == 0)
+				*(uint32_t *)value = sta_info.status;
+			else if (strcasecmp(tagname, "sta_type") == 0)
+				*(uint32_t *)value = sta_info.type;
+
+			print_debug_log("[debug] [encode] [%s:%d]\n", tagname, *(int *)value);
+			return 4;
+		}
 		case SPROTO_TBOOLEAN: {
-      if (strcasecmp(tagname, "ok") == 0)
-	      *(int *)value = self->ok;
-      print_debug_log("[debug] [encode] [%s:%d]\n", tagname, *(int *)value);
-      return 4;
-    }
-		case SPROTO_TSTRING: {
-			if (strcasecmp(tagname, "stamac") == 0)
-			{
-				if (self->stamac[macnum] == NULL)
-				 return 0;
-				strcpy(value, self->stamac[macnum++]);
-				sz = strlen(value);
+			if (strcasecmp(tagname, "ok") == 0){
+				*(int *)value = self->ok;
 			}
-			else
-			 sz = fill_encode_data(&apinfo, (char *)tagname, (char *)value);
-			print_debug_log("[debug] [encode] [%s:%s,%d]\n", tagname, (char *)value, sz);
+			print_debug_log("[debug] [encode] [%s:%d]\n", tagname, *(int *)value);
+			return 4;
+		}
+		case SPROTO_TSTRING: {
+			if (strcasecmp(tagname, "stamac") == 0){
+				if (self->stamac[macnum] != NULL){
+					strcpy(value, self->stamac[macnum++]);
+					sz = strlen(value);
+				}
+			}else{
+				sz = fill_encode_data(&apinfo, (char *)tagname, (char *)value);
+				if(self->type == STA_INFO){
+					sz = fill_encode_data_sta_info(&sta_info,(char *)tagname,(char *)value);
+				}
+			}
+
+			print_debug_log("[debug] [encode][%s:%s,%d]\n",tagname, (char *)value, sz);
 			return sz;
 		}
 		case SPROTO_TSTRUCT: {
-			if (strcasecmp(tagname, "smac") == 0 && self->stamac[macnum] == NULL)
+			if (strcasecmp(tagname, "smac") == 0 && self->stamac[macnum] == NULL){
 				return 0;
+			}
 
 			int r = sproto_encode(st, value, length, sproto_encode_cb, self);
 			return r;
 		}
 		default:
-				     print_debug_log("[debug] [unknown type!]\n");
+			print_debug_log("[debug] [unknown type!]\n");
 	}
 	return 1;
 }
@@ -113,6 +174,7 @@ int sproto_encode_data(struct encode_ud *ud, char *res)
 	int header_len, rpc_len;
 	char header[BUFLEN] = {0}, buf[BUFLEN] = {0}, pro_buf[BUFLEN] = {0};
 	struct sproto_type *pro_type;
+	int size;
 
 	if((pro_type = sproto_type(spro_new, "package")) == NULL){
 		print_debug_log("[debug] [sproto_type() failed!]\n");
@@ -131,9 +193,10 @@ int sproto_encode_data(struct encode_ud *ud, char *res)
 	if((rpc_len = sproto_encode(pro_type, pro_buf, ud->len, sproto_encode_cb, ud)) < 0){
 		return 0;
 	}
+
 	memcat(buf, pro_buf, header_len, rpc_len);
 
-	int size = sproto_pack(buf, header_len + rpc_len, res, sizeof(buf));
+	size = sproto_pack(buf, header_len + rpc_len, res, sizeof(buf));
 	print_debug_log("[debug] [encode len:%d, pack size:%d]\n", header_len + rpc_len, size);
 	return size;
 }
@@ -145,33 +208,34 @@ int sproto_parser_cb(void *ud, const char *tagname, int type, int index, struct 
 
 	switch (type) {
 		case SPROTO_TINTEGER: {
-					      if (strcasecmp(tagname, "type") == 0)
-						      self->type = ntohl(*(uint64_t *)value);
-					      else if (strcasecmp(tagname, "session") == 0)
-						      self->session = ntohl(*(uint64_t *)value);
-					      else if (strcasecmp(tagname, "apcmd") == 0)
-						      cmdinfo.cmd = ntohl(*(uint64_t *)value);
-					      print_debug_log("[debug] [parser] [%s:%d]\n", tagname, ntohl(*(uint64_t *)value));
-					      break;
-				      }
+			if (strcasecmp(tagname, "type") == 0)
+				self->type = ntohl(*(uint64_t *)value);
+			else if (strcasecmp(tagname, "session") == 0)
+				self->session = ntohl(*(uint64_t *)value);
+			else if (strcasecmp(tagname, "apcmd") == 0)
+				cmdinfo.cmd = ntohl(*(uint64_t *)value);
+
+			print_debug_log("[debug] [parser] [%s:%d]\n", tagname, ntohl(*(uint64_t *)value));
+			break;
+		}
 		case SPROTO_TBOOLEAN: {
-					      self->ok = ntohl(*(uint64_t *)value);
-					      print_debug_log("[debug] [parser] [%s:%d]\n", tagname, ntohl(*(uint64_t *)value));
-					      break;
-				      }
+			self->ok = ntohl(*(uint64_t *)value);
+			print_debug_log("[debug] [parser] [%s:%d]\n", tagname, ntohl(*(uint64_t *)value));
+			break;
+		}
 		case SPROTO_TSTRING: {
-					     fill_data(&rcvinfo, (char *)tagname, (char *)value, length);
-					     print_debug_log("[debug] [parser] [%s:%s,%d]\n", tagname, (char *)value, length);
-					     break;
-				     }
+			fill_data(&rcvinfo, (char *)tagname, (char *)value, length);
+			print_debug_log("[debug] [parser] [%s:%s,%d]\n", tagname, (char *)value, length);
+			break;
+		}
 		case SPROTO_TSTRUCT: {
-					     int r = sproto_decode(st, value, length, sproto_parser_cb, self);
-					     if (r < 0 || r != length)
-						     return r;
-					     break;
-				     }
+			int r = sproto_decode(st, value, length, sproto_parser_cb, self);
+			if (r < 0 || r != length)
+				return r;
+			break;
+		}
 		default:
-				     print_debug_log("[debug] [unknown type!]\n");
+			print_debug_log("[debug] [unknown type!]\n");
 	}
 	return 0;
 }
@@ -494,6 +558,49 @@ int get_netcard_mac(void)
 	return 1;
 }
 
+/*get the 5G netcard mac address*/
+int get_5Gnetcard_mac(void)
+{
+	/*get the mac address from flash*/
+	int file_size;
+	char buf[32] = {'\0'};
+	FILE *fp = NULL;
+
+	if (access(MAC_ADDRESS_5G_FILE,F_OK) !=0){
+		return -1;
+	}
+
+	if ((fp = fopen(MAC_ADDRESS_5G_FILE, "r")) == NULL){
+		return;
+	}
+
+	fseek(fp, 0, SEEK_END);
+	file_size = ftell(fp);
+
+	if (file_size == 0){
+		fclose(fp);
+		return;
+	}
+
+	fseek(fp,0,SEEK_SET);
+	/*get the aplist file content*/
+	while((fgets(buf,32,fp))!=NULL){
+		/*get the mac address of ap*/
+		if (!(strlen(buf) <=1 && buf[0] ==10)){
+			mac_string_to_value(buf,mac_address_5G);
+			memset(buf,'\0',sizeof(buf));
+		}
+	}
+
+	print_debug_log("%s %d 5G mac address:%02x:%02x:%02x:%02x:%02x:%02x \n",__FUNCTION__,__LINE__,\
+					mac_address_5G[0]&0xff,mac_address_5G[1]&0xff,mac_address_5G[2]&0xff,\
+					mac_address_5G[3]&0xff,mac_address_5G[4]&0xff,mac_address_5G[5]&0xff);
+
+	fclose(fp);
+
+	return 1;
+}
+
 int get_ip_in_dhcp_opt(char *file, char *ip)
 {
 	FILE *fp;
@@ -523,7 +630,7 @@ int get_ip_in_dhcp_opt(char *file, char *ip)
 	return is_ip(ip);
 }
 
-void get_ac_dns_address(char *ip)
+int get_ac_dns_address(char *ip)
 {
 	struct hostent *h;
 
@@ -535,7 +642,7 @@ void get_ac_dns_address(char *ip)
 	strcpy(ip,inet_ntoa(*((struct in_addr *)h->h_addr)));
 	print_debug_log("%s,%d AC address:%s---%s\n",__FUNCTION__,__LINE__,ip,inet_ntoa(*((struct in_addr *)h->h_addr)));
 
-	return ;
+	return is_ip(ip);
 }
 
 int get_gateway_ip(char *ip)
@@ -549,9 +656,13 @@ int get_gateway_ip(char *ip)
 	if (get_ip_in_dhcp_opt("/tmp/opt43", ip) > 0){
 		return 1;
 	}
+	if (get_ac_dns_address(ip) >0){
+		return 1;
+	}
 	if (get_gateway(ip, ifname) > 0){
 		return 1;
 	}
+
 	return 0;
 }
 
@@ -667,7 +778,7 @@ int get_ap_iwinfo(struct uci_context *c)
 int del_wireless_cfg(struct uci_context *c, char *section, char *option)
 {
 	struct uci_ptr ptr ={
-		.package = "wireless",
+		.package = "firewall",
 		.section = section,
 	};
 	if(option){
@@ -682,7 +793,7 @@ int del_wireless_cfg(struct uci_context *c, char *section, char *option)
 int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, char *value)
 {
 	struct uci_ptr ptr ={
-		.package = "wireless",
+		.package = "firewall",
 		.section = section,
 		.value = type,
 	};
@@ -703,8 +814,9 @@ static int my_strtok(char *src, char *dst[], int n)
 	char *p;
 	int i, j;
 
-	for (i = 0; i < n; i++)
+	for (i = 0; i < n; i++){
 		dst[i] = NULL;
+	}
 
 	print_debug_log("[debug] strtok src %s \n", src);
 
@@ -727,34 +839,44 @@ static int my_strtok(char *src, char *dst[], int n)
 
 int set_ap_cfg(void)
 {
-	struct uci_package * pkg = NULL;
-	struct uci_element *se, *tmp;
-	struct uci_section *s;
-	char path[] = "/etc/config/wireless";
-	int i ,j= 0;
+	char path[] = WIRE_CONFIG_FILE;
+	int i=0 ,j= 0;
+	int n, n1, n2,n3,n4,n5;
 	int wifi_iface_number = 0;
 	int wifi_device_number = 0;
-	char *option_value = NULL;
-	wifi_device device_info[MAC_WIFI_DEVICES] = {0};
-
-
-	ctx = uci_alloc_context();
-	if (ctx == NULL)
-		return 0;
-
-	if (UCI_OK != uci_load(ctx, path, &pkg))
-		return 0;
-
-	int n, n1, n2;
 	char *ssid[MAX_TEMPLATE];
 	char *encrypt[MAX_TEMPLATE];
 	char *key[MAX_TEMPLATE];
+	char *type[MAX_TEMPLATE];
+	char *hidden[MAX_TEMPLATE];
+	char *disabled[MAX_TEMPLATE];
+
 	char buf[MAX_ITEM_LEN];
+	char *option_value = NULL;
+	struct uci_package * pkg = NULL;
+	struct uci_element *se, *tmp;
+	struct uci_section *s;
+
+	wifi_device device_info[MAC_WIFI_DEVICES] = {0};
+
+	ctx = uci_alloc_context();
+	if (ctx == NULL){
+		return 0;
+	}
+
+	if (UCI_OK != uci_load(ctx, path, &pkg)){
+		return 0;
+	}
+
 	n = my_strtok(rcvinfo.ssid, ssid, MAX_TEMPLATE);
 	n1 = my_strtok(rcvinfo.encrypt, encrypt, MAX_TEMPLATE);
 	n2 = my_strtok(rcvinfo.key, key, MAX_TEMPLATE);
-	if (n1 != n || n2 != n) {
-		print_debug_log("[debug] strtok %d %d %d \n", n, n1, n2);
+	n3 = my_strtok(rcvinfo.hidden, hidden, MAX_TEMPLATE);
+	n4 = my_strtok(rcvinfo.type, type, MAX_TEMPLATE);
+	n5 = my_strtok(rcvinfo.disabled, disabled, MAX_TEMPLATE);
+
+	if (n1 != n || n2 != n || n3!=n || n4!=n || n5!=n ) {
+		print_debug_log("[debug] strtok %d %d %d %d %d %d \n", n, n1, n2,n3,n4,n5);
 		uci_free_context(ctx);
 		ctx = NULL;
 		return 0;
@@ -763,11 +885,12 @@ int set_ap_cfg(void)
 	uci_foreach_element_safe(&pkg->sections, tmp, se){
 		s = uci_to_section(se);
 		print_debug_log("[debug] %s,%d %s %s \n", __FUNCTION__,__LINE__,s->type, s->e.name);
-
+		/*disable the old wireless config*/
 		if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL){
 			uci_set_cfg(ctx, s->e.name, "wifi-iface", "disabled", "1");
 		}
-		
+
+		/*get the attr of wifi device*/
 		if (strcmp(s->type, "wifi-device") == 0 && strstr(s->e.name, "radio") != NULL){
 			memcpy(device_info[wifi_device_number].name,s->e.name,strlen(s->e.name) +1);
 			print_debug_log("[debug] %s,%d name:%s sizeof:%d strlen:%d\n",__FUNCTION__,__LINE__,device_info[wifi_device_number].name,\
@@ -794,16 +917,20 @@ int set_ap_cfg(void)
 			}
 
 			wifi_device_number = wifi_device_number +1;
-
 		}
 
+		if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "__auto_gen_by_ac_") != NULL){
+			del_wireless_cfg(ctx, s->e.name, NULL);
+			i = i +1;
+		}
 	}
 
 	if (strlen(rcvinfo.channel) != 0){
 		for(i=0;i<wifi_device_number;i++){
 			//Not support for 5G chang the channel
-			if(strstr(device_info[wifi_device_number].hwmode,"11a") == NULL ){
-				uci_set_cfg(ctx, "radio0", "wifi-device", "channel", rcvinfo.channel);
+			print_debug_log("%s %d hwmode:%s\n",__FUNCTION__,__LINE__,device_info[i].hwmode);
+			if(strstr(device_info[i].hwmode,"11a") == NULL ){
+				uci_set_cfg(ctx, device_info[i].name, "wifi-device", "channel", rcvinfo.channel);
 			}
 
 			if (strlen(rcvinfo.txpower) != 0){
@@ -812,11 +939,37 @@ int set_ap_cfg(void)
 		}
 	}
 
+	for (i = 0; i < n ; i++) {
+		for(j=0;j<wifi_device_number;j++){
+			sprintf(buf, "__auto_gen_by_ac_%d", wifi_iface_number);
+			print_debug_log("%s %d type:%d hwmode:%s\n",__FUNCTION__,__LINE__,atoi(type[i]),device_info[j].hwmode);
+			if( atoi(type[i]) == WIRELESS_5_8G ){
+				print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
 
-	for (i = 0; i < MAX_TEMPLATE*MAC_WIFI_DEVICES ; i++) {
-		if (i < n) {
-			for(j=0;j<wifi_device_number;j++){
-				sprintf(buf, "__auto_gen_by_ac_%d", wifi_iface_number);
+				if ( strstr(device_info[j].hwmode,"11a") != NULL ){
+					if (ssid[i]){
+						uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
+					}
+					if (encrypt[i]){
+						uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
+					}
+					if (key[i] && key[i][0] != 0){
+						uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
+					}
+
+					if (hidden[i] && hidden[i][0] != 0){
+						uci_set_cfg(ctx, buf, "wifi-iface", "hidden", hidden[i]);
+					}
+					if (disabled[i] && disabled[i][0] != 0){
+						uci_set_cfg(ctx, buf, "wifi-iface", "disabled", disabled[i]);
+					}
+
+					uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
+					uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
+					uci_set_cfg(ctx, buf, "wifi-iface", "device", device_info[j].name);
+					wifi_iface_number = wifi_iface_number +1;
+				}
+			}else{
 				if (ssid[i]){
 					uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
 				}
@@ -826,17 +979,18 @@ int set_ap_cfg(void)
 				if (key[i] && key[i][0] != 0){
 					uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
 				}
+				if (hidden[i] && hidden[i][0] != 0){
+					uci_set_cfg(ctx, buf, "wifi-iface", "hidden", hidden[i]);
+				}
+
+				if (disabled[i] && disabled[i][0] != 0){
+					uci_set_cfg(ctx, buf, "wifi-iface", "disabled", disabled[i]);
+				}
 
 				uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
 				uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
 				uci_set_cfg(ctx, buf, "wifi-iface", "device", device_info[j].name);
 				wifi_iface_number = wifi_iface_number +1;
-			}
-
-		} else {
-			if( i >wifi_iface_number){
-				sprintf(buf, "__auto_gen_by_ac_%d", i);
-				del_wireless_cfg(ctx, buf, NULL);
 			}
 		}
 	}
@@ -868,10 +1022,27 @@ int fill_encode_data(ApCfgInfo *apcfg,char *tagname, char *value)
 	return strlen(value);
 }
 
+int fill_encode_data_sta_info(station_info *sta_info,char *tagname, char *value)
+{
+	if (sta_info == NULL)
+		return 0;
+	if (strcasecmp(tagname, "sta_mac") == 0)
+		strcpy(value, &(sta_info->station_mac[0]));
+	else if (strcasecmp(tagname, "sta_bssid") == 0)
+		strcpy(value, &(sta_info->bssid[0]));
+	else if (strcasecmp(tagname, "sta_ssid") == 0)
+		strcpy(value, &(sta_info->ssid[0]));
+	else if (strcasecmp(tagname, "sta_ap_mac") == 0)
+		strcpy(value, &(sta_info->ap_mac[0]));
+
+	return strlen(value);
+}
+
 void fill_data(ApCfgInfo *apcfg,char *tagname, char *value, int len)
 {
 	if (strlen(value) == 0)
 		return;
+
 	if (strcasecmp(tagname, "ssid") == 0)
 		strncpy(apcfg->ssid, value, len);
 	else if (strcasecmp(tagname, "channel") == 0)
@@ -884,6 +1055,13 @@ void fill_data(ApCfgInfo *apcfg,char *tagname, char *value, int len)
 		strncpy(apcfg->txpower, value, len);
 	else if (strcasecmp(tagname, "addr") == 0)
 		strncpy(cmdinfo.addr, value, len);
+	else if (strcasecmp(tagname, "type") == 0)
+		strncpy(apcfg->type,value,len);
+	else if (strcasecmp(tagname, "hidden") == 0)
+		strncpy(apcfg->hidden,value,len);
+	else if (strcasecmp(tagname, "disabled") == 0)
+		strncpy(apcfg->disabled,value,len);
+
 	apcfg->flage = 1;
 	return;
 }
@@ -951,18 +1129,15 @@ void  ap_connect_status(struct uloop_timeout *t)
 	struct encode_ud ud;
 
 	memset(&ud, 0, sizeof(struct encode_ud));
-	if (conn_tmout >= 3 || sfd <= 0)
-	{
-		if (sfd > 0)
-		{
+	if (conn_tmout >= 3 || sfd <= 0){
+		if (sfd > 0){
 			uloop_fd_delete(&apufd);
 			close(sfd);
 			print_debug_log("%s,%d\n",__FUNCTION__,__LINE__,conn_tmout);
 		}
 		sfd = 0;
 
-		while(1)
-		{
+		while(1){
 			if (create_socket() == 0)
 				break;
 			sleep(2);
@@ -986,8 +1161,7 @@ void  ap_connect_status(struct uloop_timeout *t)
 	}
 
 	conn_tmout++;
-	if((len = write(sfd, res, size)) <= 0)
-	{
+	if((len = write(sfd, res, size)) <= 0){
 		print_debug_log("Recieve Data From Server %s Failed!\n");
 		close(sfd);
 		sfd = 0;
@@ -1082,6 +1256,7 @@ void apd_init(void)
 	get_ap_revision();
 	get_sn();
 	get_netcard_mac();
+	get_5Gnetcard_mac();
 	return;
 }
 
@@ -1236,19 +1411,15 @@ int create_socket()
 	if (is_ip(ac) > 0)
 		strncpy(ac_addr, ac, 20);
 	else {
-		/*1stop the dnsmasq*/
-		system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
-		/*2:first detect the ac dns domain*/
-		get_ac_dns_address(ac_addr);
-		if (is_ip(ac_addr) <=0){
-			/*2:if can't get the ac dns domain ,go to find the gateway address or option 43*/
-			memset(ac_addr,'\0',sizeof(ac_addr));
-			get_gateway_ip(ac_addr);
+		/*1: go to find the gateway address or option 43 ac dns domain*/
+		memset(ac_addr,'\0',sizeof(ac_addr));
+		get_gateway_ip(ac_addr);
 
-			if (is_ip(ac_addr) <= 0){
-				return -1;
-			}
+		if (get_gateway_ip(ac_addr) <= 0){
+			print_debug_log("[debug [ac addr] Can't get the ac control address !!!]");
+			return -1;
 		}
+
 	}
 
 	print_debug_log("[debug] [ac_addr ip:%s]\n", ac_addr);
@@ -1279,6 +1450,101 @@ int create_socket()
 
 	apufd.cb = rcv_and_proc_data;
 	apufd.fd = sfd;
+	return 0;
+}
+
+static void apd_ubus_receive_event(struct ubus_context *ctx, struct ubus_event_handler *ev,
+			  const char *type, struct blob_attr *msg)
+{
+	unsigned char mac[6] = {0};
+	char res[1024] = {0};
+	int size, len;
+	char *str;
+	char *buf = NULL;
+	struct encode_ud ud;
+
+	str = blobmsg_format_json(msg, true);
+
+	if(strcmp(type,APD_LISTEN_EVENT_ON) == 0){
+		memset(&ud, 0, sizeof(struct encode_ud));
+		ud.type = STA_INFO;
+		ud.session = SPROTO_REQUEST;
+		ud.stamac[0] = NULL;
+		ud.len = 200;
+
+		memset(&sta_info,0,sizeof(sta_info));
+
+		json_parse(str,"station_mac",&(sta_info.station_mac[0]));
+		/*dele the ':' and make string to int*/
+		mac_string_to_value(&(sta_info.station_mac[0]),mac);
+		if (is_broadcast_ether_addr((const u8 *)mac) || is_multicast_ether_addr((const u8 *)mac) || is_zero_ether_addr((const u8 *)mac)){
+			return ;
+		}
+
+		json_parse(str,"bssid",&(sta_info.bssid[0]));
+		memset(mac,0,sizeof(mac));
+		mac_string_to_value(&(sta_info.bssid[0]),mac);
+		print_debug_log("%s %d bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",__FUNCTION__,__LINE__,\
+						mac[0]&0xff,mac[1]&0xff,mac[2]&0xff,mac[3]&0xff,mac[4]&0xff,mac[5]&0xff);
+		if (is_broadcast_ether_addr((const u8 *)mac) || is_multicast_ether_addr((const u8 *)mac) || is_zero_ether_addr((const u8 *)mac)){
+			return ;
+		}
+		/*judge the attr of wireless*/
+		print_debug_log("%s %d 5G mac address:%02x:%02x:%02x:%02x:%02x:%02x \n",__FUNCTION__,__LINE__,\
+					mac_address_5G[0]&0xff,mac_address_5G[1]&0xff,mac_address_5G[2]&0xff,\
+					mac_address_5G[3]&0xff,mac_address_5G[4]&0xff,mac_address_5G[5]&0xff);
+		if(ether_addr_equal(mac,mac_address_5G)){
+			print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
+			sta_info.type = BSSID_IS_5G;
+		}else{
+			print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
+			sta_info.type = !(BSSID_IS_5G);
+		}
+		json_parse(str,"ssid",&(sta_info.ssid[0]));
+		memcpy(sta_info.ap_mac,apinfo.apmac,sizeof(apinfo.apmac));
+
+		sta_info.status = STATION_ON;
+
+		print_debug_log("%s %d  station_mac:%s\n",__FUNCTION__,__LINE__,sta_info.station_mac);
+		print_debug_log("%s %d  status:%d\n",__FUNCTION__,__LINE__,sta_info.status);
+		print_debug_log("%s %d  ssid:%s\n",__FUNCTION__,__LINE__,sta_info.ssid);
+		print_debug_log("%s %d  bssid:%s\n",__FUNCTION__,__LINE__,sta_info.bssid);
+		print_debug_log("%s %d  type:%d\n",__FUNCTION__,__LINE__,sta_info.type);
+		print_debug_log("%s %d  ap_mac:%s\n",__FUNCTION__,__LINE__,sta_info.ap_mac);
+		if ((size = sproto_encode_data(&ud, res)) <= 0){
+			print_debug_log("[debug] [encode data failed!]\n");
+			return 0;
+		}
+
+		print_debug_log("-<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+		if (sfd <= 0)
+			return 0;
+		len = write(sfd, res, size);
+	}
+
+	free(str);
+}
+
+static int apd_ubus_listen(struct ubus_context *ctx, char * type)
+{
+	static struct ubus_event_handler listener;
+	const char *event;
+	int ret = 0;
+
+	memset(&listener, 0, sizeof(listener));
+	listener.cb = apd_ubus_receive_event;
+
+	if (type == NULL){
+		return 0;
+	}
+
+	event = type;
+
+	ret = ubus_register_event_handler(ctx, &listener, event);
+	if (ret){
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -1336,8 +1602,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	while(1)
-	{
+	while(1){
 		if (create_socket() == 0)
 			break;
 		sleep(2);
@@ -1350,6 +1615,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to connect to ubus\n");
 		return -1;
 	}
+
+	apd_ubus_listen(uctx,APD_LISTEN_EVENT_ON);
+	//apd_ubus_listen(uctx,APD_LISTEN_EVENT_OFF);
 	ubus_add_uloop(uctx);
 	int ret = ubus_add_object(uctx, &apd_object);
 	if (ret) {

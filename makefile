@@ -8,11 +8,13 @@ all:apd
 sproto.o:sproto.c sproto.h msvcint.h
 	@$(CC) -Wall -g -c sproto.c sproto.h msvcint.h
 
-apd.o:apd.c apd.h
+json_parse.o:json_parse.h
+	@$(CC) -Wall -g -c json_parse.c
+apd.o:apd.c apd.h json_parse.h etherdevice.h
 	@$(CC) -Wall -g -c apd.c 
 	
-apd:apd.o sproto.o
-	@$(CC) -Wall -g -o apd apd.o sproto.o $(CFLAGS) $(LDFLAGS)
+apd:apd.o sproto.o json_parse.o
+	@$(CC) -Wall -g -o apd apd.o json_parse.o sproto.o $(CFLAGS) $(LDFLAGS)
 	
 clean:
 	@rm -rf apd

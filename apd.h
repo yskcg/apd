@@ -34,6 +34,8 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include "sproto.h"
+#include "json_parse.h"
+#include "etherdevice.h"
 
 
 #ifndef LINE_MAX
@@ -49,20 +51,33 @@
 #define AP_STATUS			1
 #define AP_INFO				2
 #define AP_CMD				3
+#define STA_INFO			4
 #define RESPONSE_ERROR		0
 #define RESPONSE_PACK	  	0
 #define RESPONSE_OK		  	1
 #define REBOOT  			1
 #define UPGRADE				2
 #define AP_ON				1
+#define STATION_ON			1
+#define STATION_OFF			0
 #define MAX_ITEM_LEN 		(128)
 #define MAX_TEMPLATE 		(8)
 #define MAC_WIFI_DEVICES	4
 
+#define ETH_LEN				6
+#define DEFAULT_LEN			128
+
+#define WIRELESS_2_4G		0
+#define WIRELESS_5_8G		1
+#define WIRE_CONFIG_FILE	"/etc/config/wireless"
 #define AC_DNS_DOMAIN  		"www.morewifi.ac.com"
 #define DEFAULT_DEVICE_IP	"192.168.33.111"
 #define HOST_IP_FILE		"/tmp/host_ip"
 #define MAC_ADDRESS_FILE    "/tmp/mac_address"
+#define MAC_ADDRESS_5G_FILE "/tmp/mac_address_5G"
+#define BSSID_IS_5G			1
+#define APD_LISTEN_EVENT_ON    "morewifi_notify_on"
+#define APD_LISTEN_EVENT_OFF   "morewifi_notify_off"
 
 
 FILE *debug = NULL;
@@ -113,13 +128,22 @@ struct client {
 	int ctr;
 };
 
-struct encode_ud {
+typedef struct {
+	unsigned char station_mac[32];
+	unsigned char bssid[32];
+	unsigned char ap_mac[32];
+	unsigned char status;			//1:on;0:off
+	unsigned char type;				//1:5G;0:2.4G
+	unsigned char ssid[64];
+}station_info;
+
+typedef struct encode_ud {
 	char *stamac[32];
 	int type,
 	    session,
 	    ok,
 	    len;
-};
+}encode_ud_info;
 
 enum {
 	STAINFO,
@@ -137,19 +161,22 @@ enum {
 
 typedef struct ap_cfg_info
 {
-	char ssid[200],
-	     mode[15],
-	     channel[5],
-	     encrypt[50],
-	     hver[30],
-	    model[30],
-	     sver[30],
-	     key[300],
-	     aip[20],
-	     txpower[5],
-	     apmac[20],
-	     sn[20];
-	int flage;
+	char 	ssid[128];
+	char	mode[16];
+	char	channel[8];
+	char	encrypt[64];
+	char	hver[32];
+	char	model[32];
+	char	sver[32];
+	char	key[128];
+	char	aip[32];
+	char	txpower[8];
+	char	apmac[32];
+	char	sn[32];
+	char 	hidden[16];
+	char 	disabled[16];
+	char 	type[16];
+	int 	flage;
 }ApCfgInfo;
 
 typedef struct
@@ -199,6 +226,5 @@ int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, 
 int set_ap_cfg(void);
 int get_netcard_ip(char *dev, char *ip) ;
 int proc_update(char *upd);
-
 
 #endif
