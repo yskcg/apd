@@ -18,8 +18,6 @@ static struct blob_buf b;
 
 //for station info
 static station_info sta_info;
-//for 5G netcard wireless mac address
-static char mac_address_5G[ETH_LEN] = {0};
 
 int proc_status_cmd(apcmd *cmd);
 void rcv_and_proc_data(struct uloop_fd *fd, unsigned int events);
@@ -558,49 +556,6 @@ int get_netcard_mac(void)
 	return 1;
 }
 
-/*get the 5G netcard mac address*/
-int get_5Gnetcard_mac(void)
-{
-	/*get the mac address from flash*/
-	int file_size;
-	char buf[32] = {'\0'};
-	FILE *fp = NULL;
-
-	if (access(MAC_ADDRESS_5G_FILE,F_OK) !=0){
-		return -1;
-	}
-
-	if ((fp = fopen(MAC_ADDRESS_5G_FILE, "r")) == NULL){
-		return;
-	}
-
-	fseek(fp, 0, SEEK_END);
-	file_size = ftell(fp);
-
-	if (file_size == 0){
-		fclose(fp);
-		return;
-	}
-
-	fseek(fp,0,SEEK_SET);
-	/*get the aplist file content*/
-	while((fgets(buf,32,fp))!=NULL){
-		/*get the mac address of ap*/
-		if (!(strlen(buf) <=1 && buf[0] ==10)){
-			mac_string_to_value(buf,mac_address_5G);
-			memset(buf,'\0',sizeof(buf));
-		}
-	}
-
-	print_debug_log("%s %d 5G mac address:%02x:%02x:%02x:%02x:%02x:%02x \n",__FUNCTION__,__LINE__,\
-					mac_address_5G[0]&0xff,mac_address_5G[1]&0xff,mac_address_5G[2]&0xff,\
-					mac_address_5G[3]&0xff,mac_address_5G[4]&0xff,mac_address_5G[5]&0xff);
-
-	fclose(fp);
-
-	return 1;
-}
-
 int get_ip_in_dhcp_opt(char *file, char *ip)
 {
 	FILE *fp;
@@ -778,7 +733,7 @@ int get_ap_iwinfo(struct uci_context *c)
 int del_wireless_cfg(struct uci_context *c, char *section, char *option)
 {
 	struct uci_ptr ptr ={
-		.package = "firewall",
+		.package = "wireless",
 		.section = section,
 	};
 	if(option){
@@ -793,7 +748,7 @@ int del_wireless_cfg(struct uci_context *c, char *section, char *option)
 int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, char *value)
 {
 	struct uci_ptr ptr ={
-		.package = "firewall",
+		.package = "wireless",
 		.section = section,
 		.value = type,
 	};
@@ -947,19 +902,42 @@ int set_ap_cfg(void)
 				print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
 
 				if ( strstr(device_info[j].hwmode,"11a") != NULL ){
-					if (ssid[i]){
+					if (ssid[i] && ssid[i][0] !=0){
 						uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
+						if (encrypt[i]){
+							uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
+						}
+						if (key[i] && key[i][0] != 0){
+							uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
+						}
+
+						if (hidden[i] && hidden[i][0] != 0){
+							uci_set_cfg(ctx, buf, "wifi-iface", "hidden", hidden[i]);
+						}
+						if (disabled[i] && disabled[i][0] != 0){
+							uci_set_cfg(ctx, buf, "wifi-iface", "disabled", disabled[i]);
+						}
+
+						uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
+						uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
+						uci_set_cfg(ctx, buf, "wifi-iface", "device", device_info[j].name);
 					}
+
+					wifi_iface_number = wifi_iface_number +1;
+				}
+			}else{
+				if (ssid[i] && ssid[i][0] !=0){
+					uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
 					if (encrypt[i]){
 						uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
 					}
 					if (key[i] && key[i][0] != 0){
 						uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
 					}
-
 					if (hidden[i] && hidden[i][0] != 0){
 						uci_set_cfg(ctx, buf, "wifi-iface", "hidden", hidden[i]);
 					}
+
 					if (disabled[i] && disabled[i][0] != 0){
 						uci_set_cfg(ctx, buf, "wifi-iface", "disabled", disabled[i]);
 					}
@@ -967,29 +945,8 @@ int set_ap_cfg(void)
 					uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
 					uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
 					uci_set_cfg(ctx, buf, "wifi-iface", "device", device_info[j].name);
-					wifi_iface_number = wifi_iface_number +1;
-				}
-			}else{
-				if (ssid[i]){
-					uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
-				}
-				if (encrypt[i]){
-					uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
-				}
-				if (key[i] && key[i][0] != 0){
-					uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
-				}
-				if (hidden[i] && hidden[i][0] != 0){
-					uci_set_cfg(ctx, buf, "wifi-iface", "hidden", hidden[i]);
 				}
 
-				if (disabled[i] && disabled[i][0] != 0){
-					uci_set_cfg(ctx, buf, "wifi-iface", "disabled", disabled[i]);
-				}
-
-				uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
-				uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
-				uci_set_cfg(ctx, buf, "wifi-iface", "device", device_info[j].name);
 				wifi_iface_number = wifi_iface_number +1;
 			}
 		}
@@ -1256,7 +1213,6 @@ void apd_init(void)
 	get_ap_revision();
 	get_sn();
 	get_netcard_mac();
-	get_5Gnetcard_mac();
 	return;
 }
 
@@ -1460,6 +1416,7 @@ static void apd_ubus_receive_event(struct ubus_context *ctx, struct ubus_event_h
 	char res[1024] = {0};
 	int size, len;
 	char *str;
+	int wifi_type;
 	char *buf = NULL;
 	struct encode_ud ud;
 
@@ -1489,17 +1446,9 @@ static void apd_ubus_receive_event(struct ubus_context *ctx, struct ubus_event_h
 		if (is_broadcast_ether_addr((const u8 *)mac) || is_multicast_ether_addr((const u8 *)mac) || is_zero_ether_addr((const u8 *)mac)){
 			return ;
 		}
-		/*judge the attr of wireless*/
-		print_debug_log("%s %d 5G mac address:%02x:%02x:%02x:%02x:%02x:%02x \n",__FUNCTION__,__LINE__,\
-					mac_address_5G[0]&0xff,mac_address_5G[1]&0xff,mac_address_5G[2]&0xff,\
-					mac_address_5G[3]&0xff,mac_address_5G[4]&0xff,mac_address_5G[5]&0xff);
-		if(ether_addr_equal(mac,mac_address_5G)){
-			print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
-			sta_info.type = BSSID_IS_5G;
-		}else{
-			print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
-			sta_info.type = !(BSSID_IS_5G);
-		}
+
+		json_parse(str,"type",&(wifi_type));
+		sta_info.type = atoi(&wifi_type);
 		json_parse(str,"ssid",&(sta_info.ssid[0]));
 		memcpy(sta_info.ap_mac,apinfo.apmac,sizeof(apinfo.apmac));
 
@@ -1516,7 +1465,6 @@ static void apd_ubus_receive_event(struct ubus_context *ctx, struct ubus_event_h
 			return 0;
 		}
 
-		print_debug_log("-<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
 		if (sfd <= 0)
 			return 0;
 		len = write(sfd, res, size);

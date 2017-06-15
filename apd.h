@@ -74,8 +74,6 @@
 #define DEFAULT_DEVICE_IP	"192.168.33.111"
 #define HOST_IP_FILE		"/tmp/host_ip"
 #define MAC_ADDRESS_FILE    "/tmp/mac_address"
-#define MAC_ADDRESS_5G_FILE "/tmp/mac_address_5G"
-#define BSSID_IS_5G			1
 #define APD_LISTEN_EVENT_ON    "morewifi_notify_on"
 #define APD_LISTEN_EVENT_OFF   "morewifi_notify_off"
 
