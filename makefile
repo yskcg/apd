@@ -8,8 +8,9 @@ all:apd
 sproto.o:sproto.c sproto.h msvcint.h
 	@$(CC) -Wall -g -c sproto.c sproto.h msvcint.h
 
-json_parse.o:json_parse.h
+json_parse.o:json_parse.c json_parse.h
 	@$(CC) -Wall -g -c json_parse.c
+
 apd.o:apd.c apd.h json_parse.h etherdevice.h
 	@$(CC) -Wall -g -c apd.c 
 	

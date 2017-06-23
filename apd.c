@@ -5,6 +5,7 @@
 char ac[20];
 static struct sproto *spro_new;
 static ApCfgInfo apinfo, rcvinfo;
+static char ac_info[512] = {'\0'};
 apcmd cmdinfo;
 static struct uloop_timeout timeout;
 static struct uloop_fd apufd;
@@ -18,6 +19,9 @@ static struct blob_buf b;
 
 //for station info
 static station_info sta_info;
+
+//for request the ac info ,type=0:need ac's moid sn;
+static int ac_type;
 
 int proc_status_cmd(apcmd *cmd);
 void rcv_and_proc_data(struct uloop_fd *fd, unsigned int events);
@@ -126,6 +130,8 @@ int sproto_encode_cb(void *ud, const char *tagname, int type, int index, struct 
 				*(uint32_t *)value = sta_info.status;
 			else if (strcasecmp(tagname, "sta_type") == 0)
 				*(uint32_t *)value = sta_info.type;
+			else if (strcasecmp(tagname, "ac_type") == 0)
+				*(uint32_t *)value = ac_type;
 
 			print_debug_log("[debug] [encode] [%s:%d]\n", tagname, *(int *)value);
 			return 4;
@@ -222,7 +228,14 @@ int sproto_parser_cb(void *ud, const char *tagname, int type, int index, struct 
 			break;
 		}
 		case SPROTO_TSTRING: {
-			fill_data(&rcvinfo, (char *)tagname, (char *)value, length);
+			if(self->type == AC_INFO){
+				if (strcasecmp(tagname, "ac_info") == 0){
+					strncpy(ac_info, (char *)value, length);
+					print_debug_log("[debug] [parser] [%s:%s,%d],ac_info:%s\n", tagname, (char *)value, length,ac_info);
+				}
+			}else{
+				fill_data(&rcvinfo, (char *)tagname, (char *)value, length);
+			}
 			print_debug_log("[debug] [parser] [%s:%s,%d]\n", tagname, (char *)value, length);
 			break;
 		}
@@ -280,6 +293,7 @@ int sproto_proc_data(int fd, char *data, int len)
 	struct encode_ud ud;
 	char res[BUFLEN] = {0}, unpack[BUFLEN] = {0};
 	int size, length, headlen;
+	char shell_cmd[1024] = {'\0'};
 
 	memset(&ud, 0, sizeof(struct encode_ud));
 
@@ -296,8 +310,7 @@ int sproto_proc_data(int fd, char *data, int len)
 	}
 	if (ud.session == SPROTO_RESPONSE)
 	{
-		if (ud.ok == RESPONSE_OK && ud.type == AP_STATUS)
-		{
+		if (ud.ok == RESPONSE_OK && ud.type == AP_STATUS){
 			if (live == 0) {
 				live = 1;
 				// authd may change led
@@ -307,14 +320,28 @@ int sproto_proc_data(int fd, char *data, int len)
 				system("(ubus call sysd status_led '{\"status\":\"ok\"}')");
 				/*stop the dnsmasq*/
 				system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
+
+				ud.type = AC_INFO;
+				ud.session = SPROTO_REQUEST;
+				ud.len = 32;
+
+				size = sproto_encode_data(&ud, res);
+				length = write(fd, res, size);
+				print_debug_log("%s %d size:%d length:%d\n",__FUNCTION__,__LINE__,size,length);
 			}
 			conn_tmout = 0;
 			return 1;
-		}
-		else if (ud.ok == RESPONSE_OK)
+		}else if (ud.ok == RESPONSE_OK && ud.type == AC_INFO){
+			sprintf(shell_cmd,"ubus send %s '%s'",WIFISPIDER_AC_EVENT,ac_info);
+			print_debug_log("%s %d shell_cmd:%s\n",__FUNCTION__,__LINE__,shell_cmd);
+			system(shell_cmd);
+			print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
 			return 1;
-		else
+		}else if (ud.ok == RESPONSE_OK){
+			return 1;
+		}else{
 			ud.session = SPROTO_REQUEST;
+		}
 		ud.len = 1024;
 	}
 	else if (ud.session == SPROTO_REQUEST)

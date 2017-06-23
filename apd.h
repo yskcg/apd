@@ -52,6 +52,7 @@
 #define AP_INFO				2
 #define AP_CMD				3
 #define STA_INFO			4
+#define AC_INFO				5
 #define RESPONSE_ERROR		0
 #define RESPONSE_PACK	  	0
 #define RESPONSE_OK		  	1
@@ -69,6 +70,7 @@
 
 #define WIRELESS_2_4G		0
 #define WIRELESS_5_8G		1
+#define WIRELESS_2_5G		2
 #define WIRE_CONFIG_FILE	"/etc/config/wireless"
 #define AC_DNS_DOMAIN  		"www.morewifi.ac.com"
 #define DEFAULT_DEVICE_IP	"192.168.33.111"
@@ -76,6 +78,7 @@
 #define MAC_ADDRESS_FILE    "/tmp/mac_address"
 #define APD_LISTEN_EVENT_ON    "morewifi_notify_on"
 #define APD_LISTEN_EVENT_OFF   "morewifi_notify_off"
+#define WIFISPIDER_AC_EVENT    "ac_info"
 
 
 FILE *debug = NULL;
