@@ -952,6 +952,31 @@ int set_ap_cfg(void)
 
 					wifi_iface_number = wifi_iface_number +1;
 				}
+			}else if( atoi(type[i]) == WIRELESS_2_4G ){
+				if ( strstr(device_info[j].hwmode,"11a") == NULL ){
+					if (ssid[i] && ssid[i][0] !=0){
+						uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
+						if (encrypt[i]){
+							uci_set_cfg(ctx, buf, "wifi-iface", "encryption", encrypt[i]);
+						}
+						if (key[i] && key[i][0] != 0){
+							uci_set_cfg(ctx, buf, "wifi-iface", "key", key[i]);
+						}
+						if (hidden[i] && hidden[i][0] != 0){
+							uci_set_cfg(ctx, buf, "wifi-iface", "hidden", hidden[i]);
+						}
+
+						if (disabled[i] && disabled[i][0] != 0){
+							uci_set_cfg(ctx, buf, "wifi-iface", "disabled", disabled[i]);
+						}
+
+						uci_set_cfg(ctx, buf, "wifi-iface", "network", "lan");
+						uci_set_cfg(ctx, buf, "wifi-iface", "mode", "ap");
+						uci_set_cfg(ctx, buf, "wifi-iface", "device", device_info[j].name);
+					}
+
+					wifi_iface_number = wifi_iface_number +1;
+				}
 			}else{
 				if (ssid[i] && ssid[i][0] !=0){
 					uci_set_cfg(ctx, buf, "wifi-iface", "ssid", ssid[i]);
