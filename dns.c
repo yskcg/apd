@@ -37,7 +37,7 @@ void seperate(unsigned char* name,unsigned char* host)
 	char buf[128] = {0};
 
 	if(host == NULL){
-		return 0;
+		return ;
 	}
 	
 	memcpy(buf,host,strlen(host));
