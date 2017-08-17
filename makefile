@@ -11,11 +11,14 @@ sproto.o:sproto.c sproto.h msvcint.h
 json_parse.o:json_parse.c json_parse.h
 	@$(CC) -Wall -g -c json_parse.c
 
-apd.o:apd.c apd.h json_parse.h etherdevice.h
+dns.o:dns.c dns.h
+	@$(CC) -Wall -g -c dns.c
+
+apd.o:apd.c apd.h json_parse.h etherdevice.h dns.h
 	@$(CC) -Wall -g -c apd.c 
 	
-apd:apd.o sproto.o json_parse.o
-	@$(CC) -Wall -g -o apd apd.o json_parse.o sproto.o $(CFLAGS) $(LDFLAGS)
+apd:apd.o sproto.o json_parse.o dns.o
+	@$(CC) -Wall -g -o apd apd.o json_parse.o sproto.o dns.o $(CFLAGS) $(LDFLAGS)
 	
 clean:
 	@rm -rf apd

@@ -36,6 +36,7 @@
 #include "sproto.h"
 #include "json_parse.h"
 #include "etherdevice.h"
+#include "dns.h"
 
 
 #ifndef LINE_MAX

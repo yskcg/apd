@@ -615,10 +615,24 @@ int get_ip_in_dhcp_opt(char *file, char *ip)
 int get_ac_dns_address(char *ip)
 {
 	struct hostent *h;
+	int numbers=0;
+	char gate_way[32] = {'\0'};
+	char ifname[20];
+	char *result[4][64] = {0};
 
 	if((h=gethostbyname(AC_DNS_DOMAIN))==NULL){
 		print_debug_log("%s,%d Can't get the IP\n",__FUNCTION__,__LINE__);
-		return;
+		//try other method --get the dns from the gateway
+		if (get_gateway(gate_way, ifname) > 0){
+			numbers = get_dns(AC_DNS_DOMAIN,gate_way,result);
+			print_debug_log("%d \n",numbers);
+			if(numbers >0){
+				print_debug_log("%s %d hostname:%s address:%s\n",__FUNCTION__,__LINE__,AC_DNS_DOMAIN,&result[0]);
+				strcpy(ip,&result[0]);
+			}
+		}
+
+		return is_ip(ip);
 	}
 
 	strcpy(ip,inet_ntoa(*((struct in_addr *)h->h_addr)));
