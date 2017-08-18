@@ -349,10 +349,21 @@ int sproto_proc_data(int fd, char *data, int len)
 		ud.session = SPROTO_RESPONSE;
 		ud.ok = RESPONSE_OK;
 		ud.len = 30;
-		if (ud.type == AP_INFO)
+		if (ud.type == AP_INFO){
+			if (live == 0) {
+				live = 1;
+				// authd may change led
+				system("(/etc/init.d/authd disable; /etc/init.d/authd stop)");
+				system("(uci delete firewall._auth && uci commit firewall && /etc/init.d/firewall restart)");
+
+				system("(ubus call sysd status_led '{\"status\":\"ok\"}')");
+				/*stop the dnsmasq*/
+				system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
+				usleep(500);
+			}
+
 			set_ap_cfg();
-		else if (ud.type == AP_CMD)
-		{
+		}else if (ud.type == AP_CMD){
 			size = sproto_encode_data(&ud, res);
 			length = write(fd, res, size);
 			return proc_status_cmd(&cmdinfo);
