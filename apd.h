@@ -37,12 +37,14 @@
 #include "json_parse.h"
 #include "etherdevice.h"
 #include "dns.h"
+#include "queue.h"
 
 
 #ifndef LINE_MAX
 #define LINE_MAX			1024 * 3
 #endif
 
+#define SERVER_PORT    		4444
 #define SIZEOF_LENGTH 		4
 #define ENCODE_BUFFERSIZE 	2050
 #define ENCODE_MAXSIZE 		0x1000000
@@ -80,9 +82,6 @@
 #define APD_LISTEN_EVENT_ON    "morewifi_notify_on"
 #define APD_LISTEN_EVENT_OFF   "morewifi_notify_off"
 #define WIFISPIDER_AC_EVENT    "ac_info"
-
-
-FILE *debug = NULL;
 
 struct field {
 	int tag;
@@ -206,27 +205,20 @@ typedef struct{
 	char txpower[32];
 }wifi_device;
 
-const char *ap_iwinfo[] = { "wireless.@wifi-iface[0].device",
-	"wireless.@wifi-iface[0].network",
-	"wireless.@wifi-iface[0].mode",
-	"wireless.@wifi-device[0].type",
-	"wireless.@wifi-device[0].channel",
-	"wireless.@wifi-device[0].hwmode",
-	"wireless.@wifi-device[0].htmode",
-	0};
-
-void print_debug_log(const char *form ,...);
-int get_loca_ip(char *locip, char *dev);
-void ap_proc_data(struct uloop_fd *fd, unsigned int events);
-void ap_watch_dog(struct uloop_timeout *t);
-int fill_encode_data(ApCfgInfo *apcfg,char *tagname, char *value);
-void fill_data(ApCfgInfo *apcfg,char *tagname, char *value, int len);
-int get_gateway_ip(char *ip);
-int open_file(char *path, char *res, char *flag);
-int get_ap_revision(void);
-int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, char *value);
-int set_ap_cfg(void);
-int get_netcard_ip(char *dev, char *ip) ;
-int proc_update(char *upd);
+extern void print_debug_log(const char *form ,...);
+extern int get_loca_ip(char *locip, char *dev);
+extern void ap_proc_data(struct uloop_fd *fd, unsigned int events);
+extern void ap_watch_dog(struct uloop_timeout *t);
+extern int fill_encode_data(ApCfgInfo *apcfg,char *tagname, char *value);
+extern int fill_encode_data_sta_info(station_info *sta_info,char *tagname, char *value);
+extern void fill_data(ApCfgInfo *apcfg,char *tagname, char *value, int len);
+extern int get_gateway_ip(char *ip);
+extern int open_file(char *path, char *res, char *flag);
+extern int get_ap_revision(void);
+extern int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, char *value);
+extern int set_ap_cfg(void);
+extern int get_netcard_ip(char *dev, char *ip) ;
+extern int proc_update(char *upd);
+extern void *rcv_handle(void *arg);
 
 #endif

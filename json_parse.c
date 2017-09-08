@@ -1,6 +1,6 @@
 #include "json_parse.h"
 
-int json_parse(const char *json_input,const char *field,char * output)
+int json_parse(const char *json_input,const char *field,unsigned char * output)
 {
 	struct json_object *new_obj;
 	struct json_object *o = NULL;

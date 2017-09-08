@@ -8,7 +8,7 @@
 #else
 	#include <json-c/json.h>
 #endif
+#include "apd.h"
 
-
-extern int json_parse(const char *json_input,const char *field,char * output);
+extern int json_parse(const char *json_input,const char *field,unsigned char * output);
 #endif

@@ -15,7 +15,7 @@ void convert(int ip,char *result)
     unsigned char bytes[4];
 	
 	ip = ntohl(ip);
-	print_debug_log("%u\n",ip);
+	printf("%u\n",ip);
     bytes[0] = ip & 0xFF;
     bytes[1] = (ip >>8) & 0xFF;
     bytes[2] = (ip >>16) & 0xFF;
@@ -33,16 +33,16 @@ int letter_counter = 0;
 void seperate(unsigned char* name,unsigned char* host)
 {
 	char *tokens = NULL;
-	int counter = 0;
 	char buf[128] = {0};
-
+	int len = 0;
+	
 	if(host == NULL){
 		return ;
 	}
 	
-	memcpy(buf,host,strlen(host));
+	len = strlen((const char *)host);
+	memcpy(buf,host,len);
 	tokens = strtok(buf, ".");
-
 	while(1){
 		if(tokens == NULL){
 			break;
@@ -50,9 +50,11 @@ void seperate(unsigned char* name,unsigned char* host)
 			char *i;
 			name[letter_counter] = (unsigned char)strlen(tokens);
 			letter_counter++;
-			for(i = tokens; *i != NULL; i++){
+			i = tokens;
+			for(len = 0;len < (unsigned char)strlen(tokens);len ++){
 				name[letter_counter] = *i;
 				letter_counter++;
+				i++;
 			}
 		}
 		tokens = strtok(NULL, ".");
@@ -69,8 +71,7 @@ int prepare_dns_query(char *query_name,char *dns_server)
 	unsigned char buf[256];			//used to create the query
 	struct dnsheader *dns = NULL;
 	struct question *queryinfo;
-	unsigned char* queryname;
-	struct sockaddr_in a;
+	void * queryname;
 	struct sockaddr_in servAddr;	//sockaddr for the server address
 
 	if(query_name ==NULL || dns_server == NULL){
@@ -102,11 +103,12 @@ int prepare_dns_query(char *query_name,char *dns_server)
 	dns->add_count = 0;
 
 	//given unsiged char queryname, make it point to the address of buf after the dnsheader
-	queryname = (unsigned char*)&buf[sizeof(struct dnsheader)];
-	seperate(queryname, query_name);
+	queryname = &buf[sizeof(struct dnsheader)];
+
+	seperate(queryname, (unsigned char *)query_name);
 
 	//given unsigned char queryinfo, make it point to the address of buf after dnsheader and queryname (including the null byte)
-	queryinfo =(struct question*)&buf[sizeof(struct dnsheader) + (strlen((unsigned char*)queryname) + 1)];
+	queryinfo =(struct question*)&buf[sizeof(struct dnsheader) + (strlen((const char*)queryname) + 1)];
 	queryinfo->qtype = htons(1); 
 	queryinfo->qclass = htons(1);
 	
@@ -123,7 +125,7 @@ int prepare_dns_query(char *query_name,char *dns_server)
 	inet_pton(AF_INET, dns_server, &servAddr.sin_addr);  
 
 	//send query
-	int length = sizeof(struct dnsheader)+strlen((unsigned char*)queryname)+sizeof(struct question)+1;
+	int length = sizeof(struct dnsheader)+strlen((const char*)queryname)+sizeof(struct question)+1;
 	n = sendto(sockFd,(char*)buf,length,0, (struct sockaddr*)&servAddr, sizeof(servAddr));
 
 	if (n < 0){
@@ -134,7 +136,7 @@ int prepare_dns_query(char *query_name,char *dns_server)
 }
 
 
-int parese_dns(int socket,char * dns_server,char **result)
+int parese_dns(int socket,char * dns_server,char *result)
 {
 	int len;
 	int serv_len ;
@@ -201,15 +203,10 @@ int parese_dns(int socket,char * dns_server,char **result)
 	return found;
 }
 
-int get_dns(char *query_name,char *dns_server,char **result)
+int get_dns(char *query_name,char *dns_server,char *result)
 {
 	int sockFd;						//actual socket
 	int numbers = 0;
-	int ret = -1;
-
-	struct record *answer;			//used to parse the ANSWERS
-	struct question *queryinfo;
-
 
 	if(query_name ==NULL || dns_server == NULL){
 		return 0;
@@ -217,7 +214,6 @@ int get_dns(char *query_name,char *dns_server,char **result)
 
 	//send dns query
 	sockFd = prepare_dns_query(query_name,dns_server);
-	
 	if(sockFd <=0){
 		return 0;
 	}

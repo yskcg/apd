@@ -3,6 +3,8 @@
 #include <string.h>
 
 char ac[20];
+queue_rev_msg recv_msg;
+FILE *debug = NULL;
 static struct sproto *spro_new;
 static ApCfgInfo apinfo, rcvinfo;
 static char ac_info[512] = {'\0'};
@@ -12,10 +14,18 @@ static struct uloop_fd apufd;
 static char *stamac = NULL;
 static int sfd, tt = 300, conn_tmout = 0, mac_len = 0, macnum = 0;
 static int live = 0;
-#define SERVER_PORT    4444
 static struct uci_context *ctx = NULL;
 static struct ubus_context *uctx;
 static struct blob_buf b;
+
+const char *ap_iwinfo[] = { "wireless.@wifi-iface[0].device",
+	"wireless.@wifi-iface[0].network",
+	"wireless.@wifi-iface[0].mode",
+	"wireless.@wifi-device[0].type",
+	"wireless.@wifi-device[0].channel",
+	"wireless.@wifi-device[0].hwmode",
+	"wireless.@wifi-device[0].htmode",
+	0};
 
 //for station info
 static station_info sta_info;
@@ -75,7 +85,7 @@ static void mac_string_to_value(unsigned char *mac,unsigned char *buf)
 {
     int i;
     int len;
-	const char * p_temp = mac;
+	const char * p_temp = (const char *)mac;
 
 	if(mac && buf){
 		len = strlen((const char *)mac);
@@ -147,7 +157,7 @@ int sproto_encode_cb(void *ud, const char *tagname, int type, int index, struct 
 			if (strcasecmp(tagname, "stamac") == 0){
 				if (self->stamac[macnum] != NULL){
 					strcpy(value, self->stamac[macnum++]);
-					sz = strlen(value);
+					sz = strlen((const char *)value);
 				}
 			}else{
 				sz = fill_encode_data(&apinfo, (char *)tagname, (char *)value);
@@ -567,7 +577,7 @@ int get_netcard_mac(void)
 	}
 
 	if ((fp = fopen(MAC_ADDRESS_FILE, "r")) == NULL){
-		return;
+		return -1;
 	}
 
 	fseek(fp, 0, SEEK_END);
@@ -575,7 +585,7 @@ int get_netcard_mac(void)
 
 	if (file_size == 0){
 		fclose(fp);
-		return;
+		return -1;
 	}
 
 	fseek(fp,0,SEEK_SET);
@@ -626,10 +636,10 @@ int get_ip_in_dhcp_opt(char *file, char *ip)
 int get_ac_dns_address(char *ip)
 {
 	struct hostent *h;
-	int numbers=0;
+	int numbers = 0;
 	char gate_way[32] = {'\0'};
 	char ifname[20];
-	char *result[4][64] = {0};
+	char result[4][64] = {0};
 
 	if((h=gethostbyname(AC_DNS_DOMAIN))==NULL){
 		print_debug_log("%s,%d Can't get the IP\n",__FUNCTION__,__LINE__);
@@ -639,7 +649,7 @@ int get_ac_dns_address(char *ip)
 			print_debug_log("%d \n",numbers);
 			if(numbers >0){
 				print_debug_log("%s %d hostname:%s address:%s\n",__FUNCTION__,__LINE__,AC_DNS_DOMAIN,&result[0]);
-				strcpy(ip,&result[0]);
+				strcpy(ip,(const char *)&result[0]);
 			}
 		}
 
@@ -692,7 +702,7 @@ int open_file(char *path, char *res, char *flag)
 	if ((fp = fopen(path, "r")) == NULL)
 		return -1;
 	while(!feof(fp)){
-		bzero(buf, sizeof(buf));
+		memset(buf,0, sizeof(buf));
 		if (fgets(buf, sizeof(buf), fp) == NULL){
 			fclose(fp);
 			return 0;
@@ -705,8 +715,8 @@ int open_file(char *path, char *res, char *flag)
 			continue;
 		break;
 	}
-	strncpy(res, start + 1, end - start - 1);
-	res[strlen(res)] = 0;
+	strncpy(res, start + 1, end - start);
+	res[strlen(res)-1] = '\0';
 	fclose(fp);
 	return 1;
 }
@@ -859,7 +869,7 @@ int set_ap_cfg(void)
 	char *disabled[MAX_TEMPLATE];
 
 	char buf[MAX_ITEM_LEN];
-	char *option_value = NULL;
+	const char *option_value = NULL;
 	struct uci_package * pkg = NULL;
 	struct uci_element *se, *tmp;
 	struct uci_section *s;
@@ -904,22 +914,22 @@ int set_ap_cfg(void)
 								sizeof(s->e.name),strlen(s->e.name));
 			option_value = uci_lookup_option_string(ctx,s,"hwmode");
 			if (option_value){
-				memcpy(device_info[wifi_device_number].hwmode,option_value,sizeof(option_value));
+				memcpy(device_info[wifi_device_number].hwmode,option_value,strlen(option_value));
 				print_debug_log("[debug] %s,%d hwmode:%s\n",__FUNCTION__,__LINE__,option_value);
 			}
 			option_value = uci_lookup_option_string(ctx,s,"htmode");
 			if (option_value){
-				memcpy(device_info[wifi_device_number].htmode,option_value,sizeof(option_value));
+				memcpy(device_info[wifi_device_number].htmode,option_value,strlen(option_value));
 				print_debug_log("[debug] %s,%d htmode:%s\n",__FUNCTION__,__LINE__,option_value);
 			}
 			option_value = uci_lookup_option_string(ctx,s,"channel");
 			if (option_value){
-				memcpy(device_info[wifi_device_number].channel,option_value,sizeof(option_value));
+				memcpy(device_info[wifi_device_number].channel,option_value,strlen(option_value));
 				print_debug_log("[debug] %s,%d channel:%s\n",__FUNCTION__,__LINE__,option_value);
 			}
 			option_value = uci_lookup_option_string(ctx,s,"txpower");
 			if (option_value){
-				memcpy(device_info[wifi_device_number].txpower,option_value,sizeof(option_value));
+				memcpy(device_info[wifi_device_number].txpower,option_value,strlen(option_value));
 				print_debug_log("[debug] %s,%d txpower:%s\n",__FUNCTION__,__LINE__,option_value);
 			}
 
@@ -1053,7 +1063,7 @@ int fill_encode_data(ApCfgInfo *apcfg,char *tagname, char *value)
 		strcpy(value, apcfg->aip);
 	else if (strcasecmp(tagname, "txpower") == 0)
 		strcpy(value, "20");//apcfg->txpower);
-	return strlen(value);
+	return strlen((const char *)value);
 }
 
 int fill_encode_data_sta_info(station_info *sta_info,char *tagname, char *value)
@@ -1061,15 +1071,15 @@ int fill_encode_data_sta_info(station_info *sta_info,char *tagname, char *value)
 	if (sta_info == NULL)
 		return 0;
 	if (strcasecmp(tagname, "sta_mac") == 0)
-		strcpy(value, &(sta_info->station_mac[0]));
+		strcpy(value, (const char *)&(sta_info->station_mac[0]));
 	else if (strcasecmp(tagname, "sta_bssid") == 0)
-		strcpy(value, &(sta_info->bssid[0]));
+		strcpy(value, (const char *)&(sta_info->bssid[0]));
 	else if (strcasecmp(tagname, "sta_ssid") == 0)
-		strcpy(value, &(sta_info->ssid[0]));
+		strcpy(value, (const char *)&(sta_info->ssid[0]));
 	else if (strcasecmp(tagname, "sta_ap_mac") == 0)
-		strcpy(value, &(sta_info->ap_mac[0]));
+		strcpy(value, (const char *)&(sta_info->ap_mac[0]));
 
-	return strlen(value);
+	return strlen((const char*)value);
 }
 
 void fill_data(ApCfgInfo *apcfg,char *tagname, char *value, int len)
@@ -1232,13 +1242,31 @@ void rcv_and_proc_data(struct uloop_fd *fd, unsigned int events)
 		return;
 	}
 	print_debug_log("[debug] [rcv] [data len:%d]\n", len);
-	memset(&rcvinfo, 0, sizeof(ApCfgInfo));
-	memset(&cmdinfo, 0, sizeof(apcmd));
-	if (sproto_proc_data(sfd, buf, len) <= 0){
-		print_debug_log("[debug] [process data failed!]\n");
-	}
-
+	queue_enqueue(&recv_msg,buf,len);
+	print_debug_log("%s %d front:%d rear:%d queue_size:%d\n",__FUNCTION__,__LINE__,recv_msg.front,recv_msg.rear,recv_msg.size);
 	return;
+}
+
+void *rcv_handle(void *arg)
+{
+	char buf[BUFLEN] = {0};
+	int len;
+
+	while(1){
+		if(!queue_is_empty(&recv_msg)){
+			memset(&rcvinfo, 0, sizeof(ApCfgInfo));
+			memset(&cmdinfo, 0, sizeof(apcmd));
+
+			len = queue_dequeue(&recv_msg,buf);
+			if( len> 0){
+				print_debug_log("%s %d front:%d rear:%d queue_size:%d\n",__FUNCTION__,__LINE__,recv_msg.front,recv_msg.rear,recv_msg.size);
+				if (sproto_proc_data(sfd, buf, len) <= 0){
+					print_debug_log("[debug] [process data failed!]\n");
+				}
+			}
+		}
+		usleep(100);
+	}
 }
 
 void print_debug_log(const char *form ,...)
@@ -1387,7 +1415,7 @@ void get_host_ip(char *hostip)
     char buf[32] = {'\0'};
     FILE *fp = NULL;
 	
-	memset(hostip,'\0',sizeof(hostip));
+	memset(hostip,'\0',strlen(hostip));
 	sprintf(shell_cmd,"ip -4 addr show dev br-lan | grep inet | awk '{print$2}' | sed -e 's/\\/.*//g' | sed -e '/%s/d' >%s",DEFAULT_DEVICE_IP,HOST_IP_FILE);
 	
 	print_debug_log("%s %d shell_cmd:%s\n",shell_cmd);
@@ -1491,10 +1519,10 @@ static void apd_ubus_receive_event(struct ubus_context *ctx, struct ubus_event_h
 {
 	unsigned char mac[6] = {0};
 	char res[1024] = {0};
-	int size, len;
+	int size;
+	int len;
 	char *str;
 	int wifi_type;
-	char *buf = NULL;
 	struct encode_ud ud;
 
 	str = blobmsg_format_json(msg, true);
@@ -1524,8 +1552,8 @@ static void apd_ubus_receive_event(struct ubus_context *ctx, struct ubus_event_h
 			return ;
 		}
 
-		json_parse(str,"type",&(wifi_type));
-		sta_info.type = atoi(&wifi_type);
+		json_parse(str,"type",(unsigned char *)&(wifi_type));
+		sta_info.type = atoi((const char *)&wifi_type);
 		json_parse(str,"ssid",&(sta_info.ssid[0]));
 		memcpy(sta_info.ap_mac,apinfo.apmac,sizeof(apinfo.apmac));
 
@@ -1539,11 +1567,12 @@ static void apd_ubus_receive_event(struct ubus_context *ctx, struct ubus_event_h
 		print_debug_log("%s %d  ap_mac:%s\n",__FUNCTION__,__LINE__,sta_info.ap_mac);
 		if ((size = sproto_encode_data(&ud, res)) <= 0){
 			print_debug_log("[debug] [encode data failed!]\n");
-			return 0;
+			return ;
 		}
 
-		if (sfd <= 0)
-			return 0;
+		if (sfd <= 0){
+			return ;
+		}
 		len = write(sfd, res, size);
 	}
 
@@ -1582,6 +1611,7 @@ int main(int argc, char **argv)
 	struct stat st;
 	long int size;
 	long int read_size;
+	pthread_t thread_handle_id;
 
 	while ((ch = getopt(argc, argv, "dt:i:")) != -1) {
 		switch(ch) {
@@ -1649,6 +1679,12 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to add_object object: %s\n", ubus_strerror(ret));
 		return  -1;
 	}
+
+	queue_init(&recv_msg,MAX_RCEIVE_MSG_LEN);
+
+	//pthread handle the queue of receive msg
+	pthread_create(&thread_handle_id,NULL,&rcv_handle,NULL);
+
 	apd_init();
 	ap_post_data();
 	uloop_fd_add(&apufd, ULOOP_READ);
@@ -1656,6 +1692,7 @@ int main(int argc, char **argv)
 	uloop_run();
 	uloop_done();
 	ubus_free(uctx);
+	queue_free(&recv_msg);
 	close(sfd);
 	return 0;
 }
