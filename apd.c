@@ -698,6 +698,7 @@ static int usage(char *prog)
 int open_file(char *path, char *res, char *flag)
 {
 	FILE *fp;
+	int len;
 	char buf[LINE_MAX], *str, *start, *end;
 	if ((fp = fopen(path, "r")) == NULL)
 		return -1;
@@ -715,8 +716,13 @@ int open_file(char *path, char *res, char *flag)
 			continue;
 		break;
 	}
-	strncpy(res, start + 1, end - start);
-	res[strlen(res)-1] = '\0';
+
+	start = start +1;
+	end = end -1;
+	len = end -start +1;
+	strncpy(res, start, len);
+	print_debug_log("%s %d len:%d %d start:%d end:%d\n",__FUNCTION__,__LINE__,strlen(res),len,start,end);
+	res[len] = '\0';
 	fclose(fp);
 	return 1;
 }
