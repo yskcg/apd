@@ -4,6 +4,8 @@
 
 char ac[20];
 queue_rev_msg recv_msg;
+static pthread_mutex_t queue_lock;
+
 FILE *debug = NULL;
 static struct sproto *spro_new;
 static ApCfgInfo apinfo, rcvinfo;
@@ -348,6 +350,11 @@ int sproto_proc_data(int fd, char *data, int len)
 			print_debug_log("%s %d \n",__FUNCTION__,__LINE__);
 			return 1;
 		}else if (ud.ok == RESPONSE_OK){
+			if (live == 0) {
+				live = 1;
+				system("(ubus call sysd status_led '{\"status\":\"linklost\"}')");
+			}
+
 			return 1;
 		}else{
 			ud.session = SPROTO_REQUEST;
@@ -371,7 +378,7 @@ int sproto_proc_data(int fd, char *data, int len)
 				system("(/etc/init.d/dnsmasq disable; /etc/init.d/dnsmasq stop)");
 				usleep(500);
 			}
-
+			conn_tmout = 0;
 			set_ap_cfg();
 		}else if (ud.type == AP_CMD){
 			size = sproto_encode_data(&ud, res);
@@ -1182,6 +1189,9 @@ void  ap_connect_status(struct uloop_timeout *t)
 	if (conn_tmout >= 3 || sfd <= 0){
 		if (sfd > 0){
 			uloop_fd_delete(&apufd);
+			pthread_mutex_lock(&queue_lock);
+			queue_free(&recv_msg);
+			pthread_mutex_unlock(&queue_lock);
 			close(sfd);
 			print_debug_log("%s,%d\n",__FUNCTION__,__LINE__,conn_tmout);
 		}
@@ -1235,6 +1245,9 @@ void rcv_and_proc_data(struct uloop_fd *fd, unsigned int events)
 		close(sfd);
 		sfd = 0;
 		fd->fd = 0;
+		pthread_mutex_lock(&queue_lock);
+		queue_free(&recv_msg);
+		pthread_mutex_unlock(&queue_lock);
 		return;
 	}
 	if (fd->fd <= 0) {
@@ -1259,6 +1272,7 @@ void *rcv_handle(void *arg)
 	int len;
 
 	while(1){
+		pthread_mutex_lock(&queue_lock);
 		if(!queue_is_empty(&recv_msg)){
 			memset(&rcvinfo, 0, sizeof(ApCfgInfo));
 			memset(&cmdinfo, 0, sizeof(apcmd));
@@ -1271,6 +1285,7 @@ void *rcv_handle(void *arg)
 				}
 			}
 		}
+		pthread_mutex_unlock(&queue_lock);
 		usleep(100);
 	}
 }
@@ -1686,6 +1701,7 @@ int main(int argc, char **argv)
 		return  -1;
 	}
 
+	pthread_mutex_init(&queue_lock,NULL);
 	queue_init(&recv_msg,MAX_RCEIVE_MSG_LEN);
 
 	//pthread handle the queue of receive msg
