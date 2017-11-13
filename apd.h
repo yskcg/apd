@@ -34,10 +34,14 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include "sproto.h"
+#include "util.h"
 #include "json_parse.h"
-#include "etherdevice.h"
 #include "dns.h"
 #include "queue.h"
+#include "station_info.h"
+#include "get_ac_addr.h"
+#include "ubus.h"
+#include "wireless_conf.h"
 
 
 #ifndef LINE_MAX
@@ -62,13 +66,10 @@
 #define REBOOT  			1
 #define UPGRADE				2
 #define AP_ON				1
-#define STATION_ON			1
-#define STATION_OFF			0
 #define MAX_ITEM_LEN 		(128)
 #define MAX_TEMPLATE 		(8)
 #define MAC_WIFI_DEVICES	4
 
-#define ETH_LEN				6
 #define DEFAULT_LEN			128
 
 #define WIRELESS_2_4G		0
@@ -76,12 +77,19 @@
 #define WIRELESS_2_5G		2
 #define WIRE_CONFIG_FILE	"/etc/config/wireless"
 #define AC_DNS_DOMAIN  		"www.morewifi.ac.com"
-#define DEFAULT_DEVICE_IP	"192.168.33.111"
-#define HOST_IP_FILE		"/tmp/host_ip"
-#define MAC_ADDRESS_FILE    "/tmp/mac_address"
+
+
 #define APD_LISTEN_EVENT_ON    "morewifi_notify_on"
 #define APD_LISTEN_EVENT_OFF   "morewifi_notify_off"
 #define WIFISPIDER_AC_EVENT    "ac_info"
+
+#ifndef TRUE
+	#define TRUE                1
+#endif
+
+#ifndef FALSE
+	#define FALSE               0
+#endif
 
 struct field {
 	int tag;
@@ -157,36 +165,15 @@ enum {
 	IPADDR,
 	ADDR,
 	UP,
+	DEBUG,
 	__STA_MAX
 };
 
-typedef struct ap_cfg_info
-{
-	char 	ssid[128];
-	char	mode[16];
-	char	channel[8];
-	char	encrypt[64];
-	char	hver[32];
-	char	model[32];
-	char	sver[32];
-	char	key[128];
-	char	aip[32];
-	char	txpower[8];
-	char	apmac[32];
-	char	sn[32];
-	char 	hidden[16];
-	char 	disabled[16];
-	char 	type[16];
-	int 	flage;
-}ApCfgInfo;
 
 typedef struct
 {
-	char addr[80],
-	     md5[36];
-	int  cmd,
-	     status,
-	     stanum;
+	char addr[80],md5[36];
+	int  cmd,status;
 }apcmd;
 
 struct route_info
@@ -205,20 +192,22 @@ typedef struct{
 	char txpower[32];
 }wifi_device;
 
-extern void print_debug_log(const char *form ,...);
-extern int get_loca_ip(char *locip, char *dev);
+/*function API*/
+
 extern void ap_proc_data(struct uloop_fd *fd, unsigned int events);
 extern void ap_watch_dog(struct uloop_timeout *t);
 extern int fill_encode_data(ApCfgInfo *apcfg,char *tagname, char *value);
 extern int fill_encode_data_sta_info(station_info *sta_info,char *tagname, char *value);
 extern void fill_data(ApCfgInfo *apcfg,char *tagname, char *value, int len);
-extern int get_gateway_ip(char *ip);
-extern int open_file(char *path, char *res, char *flag);
-extern int get_ap_revision(void);
-extern int uci_set_cfg(struct uci_context *c, char *section, char *type, char *option, char *value);
-extern int set_ap_cfg(void);
 extern int get_netcard_ip(char *dev, char *ip) ;
 extern int proc_update(char *upd);
 extern void *rcv_handle(void *arg);
 
+extern int sproto_encode_data(struct encode_ud *ud, char *res);
+
+/*var API*/
+
+extern station_info sta_info;
+extern int sfd;
+extern ApCfgInfo rcvinfo;
 #endif

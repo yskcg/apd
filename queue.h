@@ -1,6 +1,7 @@
 #ifndef __QUEUE_H
 #define __QUEUE_H
-#include "apd.h"
+
+#include "util.h"
 
 #define MAX_RCEIVE_MSG_LEN 16
 typedef struct{
@@ -20,6 +21,10 @@ typedef struct {
 
 typedef queue *queue_msg;
 typedef queue queue_rev_msg;
+
+/*pthread*/
+extern pthread_mutex_t queue_lock;
+extern pthread_cond_t queue_ready;
 
 extern void queue_init(queue_msg Q,int size);
 extern void queue_free(queue_msg Q);

@@ -16,7 +16,9 @@ int json_parse(const char *json_input,const char *field,unsigned char * output)
 	if (!new_obj)
 		return 1; // oops, we failed.
 
-	o = json_object_object_get(new_obj, field);
+	if (json_object_object_get_ex(new_obj, field,&o) == FALSE){
+		return 1;
+	}
 
 	print_debug_log("%s %d field:%s type:%d\n",__FUNCTION__,__LINE__,field,json_object_get_type(o));
 	if(json_object_is_type(o, json_type_string)){

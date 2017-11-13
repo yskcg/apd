@@ -15,13 +15,13 @@ void convert(int ip,char *result)
     unsigned char bytes[4];
 	
 	ip = ntohl(ip);
-	printf("%u\n",ip);
+	print_debug_log("%u\n",ip);
     bytes[0] = ip & 0xFF;
     bytes[1] = (ip >>8) & 0xFF;
     bytes[2] = (ip >>16) & 0xFF;
     bytes[3] = (ip >>24) & 0xFF;     
 	if(bytes[0] == 4){
-		printf("%d.%d.%d.00/24 (block 24)\n", bytes[1], bytes[2], bytes[3]);
+		print_debug_log("%d.%d.%d.00/24 (block 24)\n", bytes[1], bytes[2], bytes[3]);
 	}else{
 		//printf("%s %d %d.%d.%d.%d\n", __FUNCTION__,__LINE__,bytes[3], bytes[2], bytes[1], bytes[0]);
 		sprintf(result,"%d.%d.%d.%d", bytes[3], bytes[2], bytes[1], bytes[0]);
@@ -30,7 +30,7 @@ void convert(int ip,char *result)
 
 int letter_counter = 0;
 /* Purpose: formats the given hostname into a dns query format, as in 3www5yahoo3com */
-void seperate(unsigned char* name,unsigned char* host)
+void seperate(unsigned char* name,const unsigned char* host)
 {
 	char *tokens = NULL;
 	char buf[128] = {0};
@@ -40,6 +40,7 @@ void seperate(unsigned char* name,unsigned char* host)
 		return ;
 	}
 	
+	letter_counter =0;
 	len = strlen((const char *)host);
 	memcpy(buf,host,len);
 	tokens = strtok(buf, ".");
@@ -62,31 +63,30 @@ void seperate(unsigned char* name,unsigned char* host)
 	name[letter_counter] = '\0';
 }
 
-int prepare_dns_query(char *query_name,char *dns_server)
+int prepare_dns_query(const char *query_name,unsigned long int dns_server)
 {
 	int sockFd;
-	int n;
+	int n = 0;
 	uint16_t ID_q ;
 	long int times;
 	unsigned char buf[256];			//used to create the query
 	struct dnsheader *dns = NULL;
 	struct question *queryinfo;
-	void * queryname;
+	void * queryname = NULL;
 	struct sockaddr_in servAddr;	//sockaddr for the server address
 
-	if(query_name ==NULL || dns_server == NULL){
+	if(query_name == NULL || dns_server <=0 ){
 		return 0;
 	}
-
+	
 	//Set the dnsheader pointer to point at the beggining of the buffer
 	dns = (struct dnsheader *)&buf;
 	memset(buf,0,sizeof(buf));
-	
 	//fill id and flag info
 	times = time(NULL);
 	srand(times);			//random seed, using time(NULL)
 	ID_q = (uint16_t)rand()% 65536+1;	//2 byte ID 
-
+	
 	//filling in dns header
 	dns->id = ID_q;
 	dns->qr = 0; 
@@ -101,42 +101,39 @@ int prepare_dns_query(char *query_name,char *dns_server)
 	dns->ans_count = 0;
 	dns->auth_count = 0;
 	dns->add_count = 0;
-
+	
 	//given unsiged char queryname, make it point to the address of buf after the dnsheader
 	queryname = &buf[sizeof(struct dnsheader)];
-
-	seperate(queryname, (unsigned char *)query_name);
-
+	seperate(queryname, (const unsigned char *)query_name);
 	//given unsigned char queryinfo, make it point to the address of buf after dnsheader and queryname (including the null byte)
 	queryinfo =(struct question*)&buf[sizeof(struct dnsheader) + (strlen((const char*)queryname) + 1)];
 	queryinfo->qtype = htons(1); 
 	queryinfo->qclass = htons(1);
 	
 	//creat socket
-	if ((sockFd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) 
-	{
+	if ((sockFd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		return 0;
 	}
-
+	
 	//fill in remote server's info
 	memset(&servAddr,0, sizeof(servAddr));		//clear struct
-	servAddr.sin_family = AF_INET;			//specify family
-	servAddr.sin_port = htons(53);			//specify port
-	inet_pton(AF_INET, dns_server, &servAddr.sin_addr);  
+	servAddr.sin_family = AF_INET;				//specify family
+	servAddr.sin_port = htons(53);				//specify port
+	servAddr.sin_addr.s_addr = dns_server;
 
 	//send query
 	int length = sizeof(struct dnsheader)+strlen((const char*)queryname)+sizeof(struct question)+1;
 	n = sendto(sockFd,(char*)buf,length,0, (struct sockaddr*)&servAddr, sizeof(servAddr));
 
-	if (n < 0){
+	if (n <= 0){
 		return 0;
 	}
-	
+
 	return sockFd;
 }
 
 
-int parese_dns(int socket,char * dns_server,char *result)
+int parese_dns(int socket,unsigned long int dns_server,char *result)
 {
 	int len;
 	int serv_len ;
@@ -146,38 +143,41 @@ int parese_dns(int socket,char * dns_server,char *result)
 	int offset;
 	char buf[256] = {0};
 	struct sockaddr_in servAddr;	//sockaddr for the server address
-	struct dnsheader *response = NULL;
 	struct timeval tv_out;
 	struct dnsheader *dns = NULL;
 	struct record *answer;			//used to parse the ANSWERS
 	
-	response = (struct dnsheader *)&buf;
+
+	if ( dns_server <=0 || socket <=0 ){
+		return 0;
+	}
+	
 	//fill in remote server's info
 	serv_len = sizeof(servAddr);
 	memset(&servAddr,0, sizeof(servAddr));		//clear struct
 	servAddr.sin_family = AF_INET;			//specify family
 	servAddr.sin_port = htons(53);			//specify port
-	inet_pton(AF_INET, dns_server, &servAddr.sin_addr); 
-
-
-	
-	tv_out.tv_sec = 2;//等待3秒
+	servAddr.sin_addr.s_addr = dns_server;
+	tv_out.tv_sec = 2;//等待2秒
 	tv_out.tv_usec = 0;
 	setsockopt(socket,SOL_SOCKET,SO_RCVTIMEO,&tv_out, sizeof(tv_out));
-	//receive the dns server response
-
-	len = recvfrom(socket, (char*)buf, sizeof(buf), 0, (struct sockaddr*)&servAddr, &serv_len);
+	
+	len = recvfrom(socket, (char*)buf, sizeof(buf), 0, (struct sockaddr*)&servAddr, (socklen_t *)&serv_len);
 
 	if (len < 0){
 		return 0;
 	}
-
+	
 	dns = (struct dnsheader*)&buf;
 	num_answers = htons(dns->ans_count);
 	//parse answer
 	offset = sizeof(struct dnsheader);		
-	offset += letter_counter+1;				
-	offset += sizeof(struct question);		
+	offset += letter_counter+1;
+	offset += sizeof(struct question);
+	if(offset > sizeof(buf)){
+		return 0;
+	}
+
 	answer = (struct record*)&buf[offset];		//the start of answer is located after sizeof(dnsheader, leter_counter (length of formated string) and question)
 	
 	while(num_answers != 0){
@@ -199,27 +199,27 @@ int parese_dns(int socket,char * dns_server,char *result)
 		}
 		num_answers--;
 	}
-
+	
 	return found;
 }
 
-int get_dns(char *query_name,char *dns_server,char *result)
+int get_dns(const char *query_name,unsigned long int dns_server,char *result)
 {
 	int sockFd;						//actual socket
 	int numbers = 0;
 
-	if(query_name ==NULL || dns_server == NULL){
+	if(query_name ==NULL || dns_server <=0 ){
 		return 0;
 	}
-
+	
 	//send dns query
 	sockFd = prepare_dns_query(query_name,dns_server);
 	if(sockFd <=0){
 		return 0;
 	}
-
+	
 	//recieve answer
 	numbers = parese_dns(sockFd,dns_server,result);
-
+	
 	return numbers;
 }

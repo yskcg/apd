@@ -1,11 +1,23 @@
-#ifndef _LINUX_ETHERDEVICE_H
-#define _LINUX_ETHERDEVICE_H
-#include <stdio.h>
+#ifndef _ETHERDEVICE_H
+#define _ETHERDEVICE_H
 
-#define u16 unsigned short
-#define u32 unsigned int
-#define u8  char
-#define u8_t unsigned char 
+#include "util.h"
+
+#ifndef u16
+	#define u16 unsigned short
+#endif
+
+#ifndef u32
+	#define u32 unsigned int
+#endif
+
+#ifndef u8
+	#define u8  char
+#endif
+
+#ifndef u8_t
+	#define u8_t unsigned char 
+#endif
 
 /**
  * is_multicast_ether_addr - Determine if the Ethernet address is a multicast.

@@ -13,7 +13,7 @@
 #include<errno.h>
 #include<time.h>
 
-#include "apd.h"
+#include "util.h"
 
 #define MAXSIZE 256
 #define MAXqueryname 63
@@ -72,5 +72,6 @@ struct query
 	struct question *ques;
 };
 
-extern int get_dns(char *query_name,char *dns_server,char *result);
+extern int get_dns(const char *query_name,unsigned long int dns_server,char *result);
+
 #endif

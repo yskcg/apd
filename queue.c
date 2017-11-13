@@ -1,5 +1,9 @@
 #include "queue.h"
 
+/*For pthread*/
+pthread_mutex_t queue_lock;
+pthread_cond_t queue_ready;
+
 int queue_is_empty(queue_msg Q)
 {
 	return Q->size == 0;
@@ -27,8 +31,12 @@ void queue_init(queue_msg Q,int size)
 void queue_free(queue_msg Q)
 {
 	int i;
-	if(queue_is_empty){
-		return 0;
+
+	pthread_mutex_lock(&queue_lock);
+			
+	if(queue_is_empty(Q)){
+		pthread_mutex_unlock(&queue_lock);
+		return ;
 	}
 	
 	for(i = 0;i<MAX_RCEIVE_MSG_LEN;i++){
@@ -36,6 +44,7 @@ void queue_free(queue_msg Q)
 			free(Q->data[i].array);
 		}
 	}
+	pthread_mutex_unlock(&queue_lock);
 }
 
 int queue_enqueue(queue_msg Q,void * data,int data_len)
@@ -43,10 +52,13 @@ int queue_enqueue(queue_msg Q,void * data,int data_len)
 	int len = 0;
 	int position;
 	
+	pthread_mutex_lock(&queue_lock);
 	if(queue_is_full(Q)){
+		pthread_mutex_unlock(&queue_lock);
 		return 1;
 	}else{
 		if(!data){
+			pthread_mutex_unlock(&queue_lock);
 			return 2;
 		}
 		
@@ -58,8 +70,12 @@ int queue_enqueue(queue_msg Q,void * data,int data_len)
 
 		Q->rear = (Q->rear+1) % Q->capacity;
 		Q->size = Q->size +1;
+		
+		/*send the pthread cond to the handle pthread*/
+		pthread_cond_signal(&queue_ready);
 	}
 
+	pthread_mutex_unlock(&queue_lock);
 	return 0;
 }
 
