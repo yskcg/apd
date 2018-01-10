@@ -209,16 +209,16 @@ void get_sn(void)
 
 void get_host_ip(char *hostip)
 {
-	char shell_cmd[128] = {'\0'};
+	char shell_cmd[256] = {'\0'};
     int file_size;
     char buf[32] = {'\0'};
     FILE *fp = NULL;
 	
-	memset(hostip,'\0',strlen(hostip));
-	sprintf(shell_cmd,"ip -4 addr show dev br-lan | grep inet | awk '{print$2}' | sed -e 's/\\/.*//g' | sed -e '/%s/d' >%s",DEFAULT_DEVICE_IP,HOST_IP_FILE);
+
+	sprintf(shell_cmd," . /usr/sbin/get_host_ip.sh");
+	system(shell_cmd);
 	
-	print_debug_log("%s %d shell_cmd:%s\n",shell_cmd);
-    system(shell_cmd);
+	sleep(1);
 
     if (access(HOST_IP_FILE,F_OK) !=0){
         return ;

@@ -83,7 +83,7 @@ int set_ap_cfg(void)
 		s = uci_to_section(se);
 		print_debug_log("%s,%d %s %s \n", __FUNCTION__,__LINE__,s->type, s->e.name);
 		/*disable the old wireless config*/
-		if (strcmp(s->type, "wifi-iface") == 0 && strstr(s->e.name, "cfg") != NULL){
+		if (strcmp(s->type, "wifi-iface") == 0 ){
 			uci_set_cfg(ctx, s->e.name, "wifi-iface", "disabled", "1");
 		}
 
